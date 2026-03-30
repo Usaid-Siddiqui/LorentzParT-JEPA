@@ -130,9 +130,7 @@ class JetClassTrainer(Trainer):
                     avg_loss = running_loss_sum / running_count
                     avg_metric = (running_metric_sum / running_count) if self.metric else 0.0
 
-                    # Update scheduler based on paper's setup
-                    if self.scheduler and (step > total_steps * 0.7 and step % (total_steps * 0.3 // 15) == 0):
-                            self.scheduler.step()
+                    pass  # scheduler stepped per epoch below
 
                     # Short summary
                     if self.rank == 0:
@@ -201,6 +199,9 @@ class JetClassTrainer(Trainer):
                         f"val_loss: {val_loss:.4f} | "
                         f"val_metric: {val_metric:.4f}"
                     )
+
+                if self.scheduler:
+                    self.scheduler.step()
 
                 # Get learning rate
                 current_lr = self.optimizer.param_groups[0]['lr']
