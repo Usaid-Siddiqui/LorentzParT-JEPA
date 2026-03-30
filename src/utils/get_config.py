@@ -66,11 +66,15 @@ def get_optim_wrapper_from_config(optim_wrapper_config: Dict, registry: Dict, op
 
 def get_scheduler_from_config(scheduler_config: Dict, registry: Dict, optimizer: Optimizer) -> _LRScheduler:
     name = scheduler_config['name']
-    kwargs = scheduler_config.get('kwargs', {})
+    # Accept kwargs either nested under 'kwargs' or flat at the top level
+    kwargs = {
+        **{k: v for k, v in scheduler_config.items() if k not in ('name', 'kwargs')},
+        **scheduler_config.get('kwargs', {}),
+    }
 
     if name not in registry:
         raise ValueError(f"Scheduler '{name}' not found in registry.")
-    
+
     scheduler = registry[name]
     sig = inspect.signature(scheduler.__init__)
     valid_args = {
