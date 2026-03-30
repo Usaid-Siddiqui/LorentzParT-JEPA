@@ -18,16 +18,6 @@ JEPA outperforms both baselines by **+5.5 pp** over MAE and **+5.9 pp** over scr
 
 > **Note:** Absolute accuracy is intentionally modest — this is a 100k proof-of-concept demo on a balanced 10-class problem (random = 10%). Full-scale results on 100M samples are expected in the 70–80% range. The relative ordering JEPA > MAE > Scratch is the key claim.
 
-### Pretraining Convergence
-
-<p align="center">
-  <img src="outputs/pretrain_convergence_comparison.png" width="90%">
-</p>
-
-*Left: validation loss vs epoch. Right: validation loss vs wall-clock time. Dashed lines mark each method's best checkpoint.*
-
----
-
 ### ROC Curves
 
 <p align="center">
