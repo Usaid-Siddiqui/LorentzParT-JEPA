@@ -280,8 +280,8 @@ def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, labels: Option
             "$H \\to \\ell \\nu qq'$",  # 5
             "$Z \\to q\\bar{q}$",  # 6
             "$W \\to qq'$",  # 7
-            "$t \\to b\\ell \\nu$",  # 8
-            "$t \\to bqq'$"  # 9
+            "$t \\to bqq'$",  # 8
+            "$t \\to b\\ell \\nu$"  # 9
         ]
 
     plt.figure(figsize=(6, 5))
