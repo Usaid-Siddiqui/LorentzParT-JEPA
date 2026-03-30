@@ -1,8 +1,8 @@
 # LorentzParT-JEPA
 
-**GSoC 2026 — Event Classification with Masked Transformer Autoencoders**
+**GSoC 2026: Event Classification with Masked Transformer Autoencoders**
 
-A JEPA (Joint-Embedding Predictive Architecture) pretraining pipeline for the LorentzParT model, comparing latent-space prediction against masked autoencoding (MAE) and from-scratch training on jet classification.
+This is a demo for a JEPA (Joint-Embedding Predictive Architecture) pretraining pipeline for the LorentzParT model, comparing latent-space prediction against masked autoencoding (MAE) and from-scratch training on jet classification. Part of several proposed improvements to the existing project completed by [Thanh Nguyen](https://medium.com/@thanhnguyen14401/gsoc-2025-with-ml4sci-event-classification-with-masked-transformer-autoencoders-6da369d42140) for GSOC 2025. 
 
 ---
 
@@ -16,7 +16,7 @@ A JEPA (Joint-Embedding Predictive Architecture) pretraining pipeline for the Lo
 
 JEPA outperforms both baselines by **+5.5 pp** over MAE and **+5.9 pp** over scratch, demonstrating that learning in embedding space produces a more transferable representation than raw feature reconstruction.
 
-> **Note:** Absolute accuracy is intentionally modest — this is a 100k proof-of-concept demo on a balanced 10-class problem (random = 10%). Full-scale results on 100M samples are expected in the 70–80% range. The relative ordering JEPA > MAE > Scratch is the key claim.
+> **Note:** Due to limitations on time/compute resources, as well as the nature of this being a demo, the accuracy is modest. This is a proof of concept on a balanced 10-class set of 100k jets. Full-scale results are expected to scale significantly better on the complete 100M dataset. Ablation studies to optimize various hyperparameters are also expected to improve performance.
 
 ### ROC Curves
 
@@ -59,7 +59,7 @@ JEPA outperforms both baselines by **+5.5 pp** over MAE and **+5.9 pp** over scr
 | t→bqq′ | **57.9%** | 19.5% | 11.5% |
 | t→bℓν | 32.6% | 26.1% | 30.7% |
 
-JEPA shows the largest gains on structurally complex decays — most notably t→bqq′ (+38 pp over MAE, +46 pp over scratch) — consistent with its objective of learning particle relationships in latent space rather than memorising feature statistics.
+JEPA shows the largest gains on structurally complex decays, most notably t→bqq′ (+38 pp over MAE, +46 pp over scratch), consistent with its objective of learning particle relationships in latent space rather than recreating individual feature statistics.
 
 ---
 
