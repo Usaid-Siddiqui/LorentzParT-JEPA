@@ -14,9 +14,9 @@ This is a demo for a JEPA (Joint-Embedding Predictive Architecture) pretraining 
 | MAE pretrained → finetune | 24.06% | 1.956 |
 | From scratch | 23.64% | 1.960 |
 
-JEPA outperforms both baselines by **+5.5 pp** over MAE and **+5.9 pp** over scratch, demonstrating that learning in embedding space produces a more transferable representation than raw feature reconstruction.
+The JEPA pretrained model outperforms both baselines by **+5.5 pp** over MAE and **+5.9 pp** over scratch, demonstrating that learning in embedding space produces a more transferable representation than raw feature reconstruction.
 
-> **Note:** Due to limitations on time/compute resources, as well as the nature of this being a demo, the accuracy is modest. This is a proof of concept on a balanced 10-class set of 100k jets. Full-scale results are expected to scale significantly better on the complete 100M dataset. Ablation studies to optimize various hyperparameters are also expected to improve performance.
+> **Note:** Due to limitations on time/compute resources, as well as the nature of this being a demo, the accuracy is modest. This is a proof of concept on a balanced 10-class set of 100k jets. Full-scale results are expected to scale significantly better on the complete 100M dataset. Conducting ablation studies and optimizing hyperparameters may also expected to improve performance.
 
 ### ROC Curves
 
