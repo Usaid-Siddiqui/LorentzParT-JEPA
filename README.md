@@ -2,7 +2,7 @@
 
 **GSoC 2026: Event Classification with Masked Transformer Autoencoders**
 
-This is a demo for a JEPA (Joint-Embedding Predictive Architecture) pretraining pipeline for the LorentzParT model, comparing latent-space prediction against masked autoencoding (MAE) and from-scratch training on jet classification. Part of several proposed improvements to the existing project completed by [Thanh Nguyen](https://medium.com/@thanhnguyen14401/gsoc-2025-with-ml4sci-event-classification-with-masked-transformer-autoencoders-6da369d42140) for GSOC 2025. 
+This is a demo for a JEPA (Joint-Embedding Predictive Architecture) pretraining pipeline for the LorentzParT model, created by [Thanh Nguyen](https://medium.com/@thanhnguyen14401/gsoc-2025-with-ml4sci-event-classification-with-masked-transformer-autoencoders-6da369d42140) for GSOC 2025. JEPA style latent-space prediction is compared against masked autoencoding (MAE) and from-scratch training on jet classification. One of several proposed improvements to the existing project.
 
 ---
 
