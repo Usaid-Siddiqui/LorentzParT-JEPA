@@ -1,0 +1,25 @@
+# Linear probe head training config.
+# Only the nn.Linear(embed_dim, num_classes) head is trained;
+# the pretrained encoder is frozen throughout.
+
+epochs: 10
+batch_size: 1000
+
+# Encoder architecture — must match the pretrained checkpoint
+embed_dim: 128
+num_heads: 8
+num_layers: 8
+dropout: 0.1
+expansion_factor: 4
+pair_embed_dims: [64, 64, 64]
+
+optimizer:
+  lr: 0.001
+  weight_decay: 0.01
+
+scheduler:
+  T_max: 10
+  eta_min: 0.00001
+
+num_workers: 8
+pin_memory: true

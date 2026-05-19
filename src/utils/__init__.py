@@ -8,3 +8,4 @@ from .get_config import (
 )
 from .multigpu import set_seed, setup_ddp, cleanup_ddp
 from .metrics import accuracy_metric_ce
+from .embedding_stats import compute_embedding_stats, probe_encoder_stats
