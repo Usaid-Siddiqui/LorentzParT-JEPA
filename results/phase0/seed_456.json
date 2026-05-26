@@ -1,0 +1,106 @@
+{
+  "seed": 456,
+  "conditions": {
+    "jepa_finetune": {
+      "best_val_acc": 0.3201,
+      "pretrain_time_s": 862.8835151509993,
+      "test_acc": 0.3256,
+      "per_class_acc": [
+        0.323,
+        0.099,
+        0.183,
+        0.56,
+        0.251,
+        0.256,
+        0.137,
+        0.413,
+        0.703,
+        0.331
+      ],
+      "embedding_stats": {
+        "mean_var": 38.922119140625,
+        "effective_rank": 10.198713302612305,
+        "mean_cos_sim": 0.14525926113128662
+      }
+    },
+    "mae_finetune": {
+      "best_val_acc": 0.2486,
+      "pretrain_time_s": 575.4430196479989,
+      "test_acc": 0.2378,
+      "per_class_acc": [
+        0.17,
+        0.218,
+        0.143,
+        0.459,
+        0.072,
+        0.301,
+        0.002,
+        0.347,
+        0.412,
+        0.254
+      ],
+      "embedding_stats": {
+        "mean_var": 1.1925251483917236,
+        "effective_rank": 22.162227630615234,
+        "mean_cos_sim": 0.803596019744873
+      }
+    },
+    "scratch": {
+      "best_val_acc": 0.2712,
+      "pretrain_time_s": null,
+      "test_acc": 0.2708,
+      "per_class_acc": [
+        0.121,
+        0.1,
+        0.115,
+        0.62,
+        0.264,
+        0.286,
+        0.119,
+        0.464,
+        0.353,
+        0.266
+      ]
+    },
+    "jepa_probe": {
+      "run_name": "probe_jepa_seed456",
+      "seed": 456,
+      "weights": "./logs/ParticleJEPA/best/jepa_seed456.pt",
+      "test_acc": 0.1868,
+      "best_val_acc": 0.1927,
+      "per_class_acc": [
+        0.028,
+        0.08,
+        0.067,
+        0.591,
+        0.141,
+        0.134,
+        0.099,
+        0.176,
+        0.076,
+        0.476
+      ],
+      "train_time_s": 79.01606589099902
+    },
+    "mae_probe": {
+      "run_name": "probe_mae_seed456",
+      "seed": 456,
+      "weights": "./logs/LorentzParT/best/mae_seed456.pt",
+      "test_acc": 0.2225,
+      "best_val_acc": 0.2254,
+      "per_class_acc": [
+        0.098,
+        0.15,
+        0.154,
+        0.636,
+        0.08,
+        0.13,
+        0.037,
+        0.283,
+        0.206,
+        0.451
+      ],
+      "train_time_s": 78.81843676599965
+    }
+  }
+}

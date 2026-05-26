@@ -1,0 +1,20 @@
+{
+  "run_name": "probe_mae_seed456",
+  "seed": 456,
+  "weights": "./logs/LorentzParT/best/mae_seed456.pt",
+  "test_acc": 0.2225,
+  "best_val_acc": 0.2254,
+  "per_class_acc": [
+    0.098,
+    0.15,
+    0.154,
+    0.636,
+    0.08,
+    0.13,
+    0.037,
+    0.283,
+    0.206,
+    0.451
+  ],
+  "train_time_s": 78.81843676599965
+}
