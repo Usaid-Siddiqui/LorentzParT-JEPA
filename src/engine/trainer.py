@@ -298,10 +298,12 @@ class Trainer:
 
     def _set_logging_paths(self, run_name: str):
         self.run_name = run_name
-        self._log_header_written = True
         self.best_model_path = os.path.join(self.best_models_dir, f"{self.run_name}.pt") if self.save_best else None
         self.checkpoint_path = os.path.join(self.checkpoints_dir, f"{self.run_name}.pt") if self.save_ckpt else None
         self.logging_path = os.path.join(self.loggings_dir, f"{self.run_name}.csv")
+        # Only treat header as written if the file already exists (i.e. resuming a run).
+        # For fresh runs the file won't exist yet, so we must write the header on first log_csv call.
+        self._log_header_written = os.path.exists(self.logging_path)
 
     def save_checkpoint(self, epoch: int):
         model_state = self.model.module.state_dict() if self._is_distributed else self.model.state_dict()

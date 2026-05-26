@@ -90,23 +90,52 @@ def run_stage(cmd, env, desc):
 
 # ── CSV log readers ───────────────────────────────────────────────────────────
 
-def _read_csv_rows(path):
+# Known column orders for headerless CSVs (caused by a bug where
+# _set_logging_paths unconditionally set _log_header_written = True).
+# Order matches the `logs` dict in each trainer's log_csv call.
+_FINETUNE_COLS      = ['epoch', 'train_loss', 'train_metric', 'val_loss',
+                       'val_metric', 'learning_rate']
+_JEPA_PRETRAIN_COLS = ['epoch', 'embedding_loss', 'val_loss', 'learning_rate',
+                       'ema_momentum', 'epoch_time_s', 'elapsed_total_s', 'best_epoch']
+_MAE_PRETRAIN_COLS  = ['epoch', 'train_loss', 'val_loss', 'learning_rate',
+                       'epoch_time_s', 'elapsed_total_s', 'best_epoch']
+
+
+def _read_csv_rows(path, fallback_cols=None):
+    """Read CSV rows as dicts. If no header row is detected and fallback_cols
+    is provided, column names are assigned positionally."""
     if not os.path.exists(path):
         return []
     with open(path, newline='') as f:
-        return list(csv.DictReader(f))
+        raw = f.read().strip()
+    if not raw:
+        return []
+    first_field = raw.split('\n')[0].split(',')[0].strip()
+    try:
+        float(first_field)      # numeric first field → headerless CSV
+        has_header = False
+    except ValueError:
+        has_header = True       # string first field → proper header present
+
+    with open(path, newline='') as f:
+        if has_header:
+            return list(csv.DictReader(f))
+        elif fallback_cols:
+            return [dict(zip(fallback_cols, row)) for row in csv.reader(f)]
+        else:
+            return []
 
 
-def read_best_csv(path, column, mode='max'):
-    rows = _read_csv_rows(path)
+def read_best_csv(path, column, mode='max', fallback_cols=None):
+    rows = _read_csv_rows(path, fallback_cols=fallback_cols)
     vals = [float(r[column]) for r in rows if column in r]
     if not vals:
         return None
     return max(vals) if mode == 'max' else min(vals)
 
 
-def read_last_csv(path, column):
-    rows = _read_csv_rows(path)
+def read_last_csv(path, column, fallback_cols=None):
+    rows = _read_csv_rows(path, fallback_cols=fallback_cols)
     for row in reversed(rows):
         if column in row:
             return float(row[column])
@@ -274,7 +303,8 @@ def run_seed(seed, args, python, env):
         ('scratch',       scratch, scratch_csv),
     ]:
         c = {
-            'best_val_acc':    read_best_csv(ft_csv, 'val_metric', mode='max'),
+            'best_val_acc':    read_best_csv(ft_csv, 'val_metric', mode='max',
+                                             fallback_cols=_FINETUNE_COLS),
             'pretrain_time_s': None,
         }
         if os.path.exists(ft_path):
@@ -287,8 +317,10 @@ def run_seed(seed, args, python, env):
         conditions[label] = c
 
     # Attach pretraining timing and embedding stats
-    conditions['jepa_finetune']['pretrain_time_s'] = read_last_csv(jepa_pt_csv, 'elapsed_total_s')
-    conditions['mae_finetune']['pretrain_time_s']  = read_last_csv(mae_pt_csv,  'elapsed_total_s')
+    conditions['jepa_finetune']['pretrain_time_s'] = read_last_csv(
+        jepa_pt_csv, 'elapsed_total_s', fallback_cols=_JEPA_PRETRAIN_COLS)
+    conditions['mae_finetune']['pretrain_time_s']  = read_last_csv(
+        mae_pt_csv,  'elapsed_total_s', fallback_cols=_MAE_PRETRAIN_COLS)
     conditions['jepa_finetune']['embedding_stats'] = jepa_embed_stats
     conditions['mae_finetune']['embedding_stats']  = mae_embed_stats
 
