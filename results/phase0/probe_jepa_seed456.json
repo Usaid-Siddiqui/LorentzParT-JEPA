@@ -1,0 +1,20 @@
+{
+  "run_name": "probe_jepa_seed456",
+  "seed": 456,
+  "weights": "./logs/ParticleJEPA/best/jepa_seed456.pt",
+  "test_acc": 0.1868,
+  "best_val_acc": 0.1927,
+  "per_class_acc": [
+    0.028,
+    0.08,
+    0.067,
+    0.591,
+    0.141,
+    0.134,
+    0.099,
+    0.176,
+    0.076,
+    0.476
+  ],
+  "train_time_s": 79.01606589099902
+}
