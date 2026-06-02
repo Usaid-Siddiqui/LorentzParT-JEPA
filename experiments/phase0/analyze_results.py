@@ -6,7 +6,7 @@ across seeds for each condition and metric.
 
 Must be run from the LorentzParT_JEPA/ root directory:
 
-    python experiments/phase0/analyze_results.py --results-dir ./results/phase0
+    python experiments/phase0/analyze_results.py --results-dir ./experiments/phase0/results
 """
 
 import os
@@ -45,7 +45,7 @@ CLASS_NAMES = [
 
 def parse_args():
     p = argparse.ArgumentParser(description="Aggregate Phase 0 results")
-    p.add_argument('--results-dir', default='./results/phase0')
+    p.add_argument('--results-dir', default='./experiments/phase0/results')
     p.add_argument('--output-dir',  default=None, help='Defaults to --results-dir')
     return p.parse_args()
 

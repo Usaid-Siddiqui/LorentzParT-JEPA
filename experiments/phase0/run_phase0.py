@@ -18,7 +18,7 @@ Skip flags let you resume mid-experiment:
     --skip-finetune
     --skip-probe
 
-Outputs per seed:  results/phase0/seed_{seed}.json
+Outputs per seed:  experiments/phase0/results/seed_{seed}.json
 Summary:           run analyze_results.py after all seeds complete.
 """
 
@@ -67,7 +67,7 @@ def parse_args():
     p = argparse.ArgumentParser(description="Phase 0 multi-seed experiment")
     p.add_argument('--data-dir',         default='./data')
     p.add_argument('--seeds',            nargs='+', type=int, default=[42, 123, 456])
-    p.add_argument('--output-dir',       default='./results/phase0')
+    p.add_argument('--output-dir',       default='./experiments/phase0/results')
     p.add_argument('--gpu',              type=int, default=0)
     p.add_argument('--pretrain-config',  default='./configs/pretrain_jepa.yaml')
     p.add_argument('--mae-config',       default='./configs/pretrain_mae.yaml')
