@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from sklearn.metrics import roc_auc_score
 
 from src.models.linear_probe import LinearProbeModel
 from src.utils import set_seed
@@ -70,13 +71,18 @@ def evaluate(model, loader, device):
     y_pred = np.concatenate(all_pred, axis=0)
     y_true = np.concatenate(all_true, axis=0)
     acc = float((np.argmax(y_pred, 1) == np.argmax(y_true, 1)).mean())
+    auc = float(roc_auc_score(y_true, y_pred, average='macro', multi_class='ovo'))
     per_class = []
+    per_class_auc = []
     for i in range(10):
         mask = np.argmax(y_true, 1) == i
         per_class.append(
             float((np.argmax(y_pred[mask], 1) == i).mean()) if mask.sum() > 0 else 0.0
         )
-    return acc, per_class
+        per_class_auc.append(float(roc_auc_score(
+            (np.argmax(y_true, 1) == i).astype(int), y_pred[:, i]
+        )))
+    return acc, auc, per_class, per_class_auc
 
 
 def main():
@@ -147,6 +153,7 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     best_val_acc = 0.0
+    best_val_auc = 0.0
     t_start = time.monotonic()
 
     for epoch in range(epochs):
@@ -161,30 +168,36 @@ def main():
             optimizer.step()
 
         scheduler.step()
-        val_acc, _ = evaluate(model, val_loader, device)
+        val_acc, val_auc, _, _ = evaluate(model, val_loader, device)
         best_val_acc = max(best_val_acc, val_acc)
-        print(f"epoch {epoch + 1:2d}/{epochs} | val_acc: {val_acc:.4f}")
+        best_val_auc = max(best_val_auc, val_auc)
+        print(f"epoch {epoch + 1:2d}/{epochs} | val_acc: {val_acc:.4f}  val_auc: {val_auc:.4f}")
 
     train_time_s = time.monotonic() - t_start
-    test_acc, per_class_acc = evaluate(model, test_loader, device)
+    test_acc, test_auc, per_class_acc, per_class_auc = evaluate(model, test_loader, device)
 
     print(f"\nLinear probe results ({args.run_name})")
     print(f"  test_acc:     {test_acc:.4f}")
+    print(f"  test_auc:     {test_auc:.4f}")
     print(f"  best_val_acc: {best_val_acc:.4f}")
+    print(f"  best_val_auc: {best_val_auc:.4f}")
     print(f"  train_time_s: {train_time_s:.1f}")
-    print("\nPer-class accuracy:")
-    for name, acc in zip(CLASS_NAMES, per_class_acc):
-        print(f"  {name:<12}: {acc:.4f}")
+    print("\nPer-class accuracy / AUC:")
+    for name, acc, auc in zip(CLASS_NAMES, per_class_acc, per_class_auc):
+        print(f"  {name:<12}: acc={acc:.4f}  auc={auc:.4f}")
 
     run_name = args.run_name or f'probe_seed{args.seed}'
     results = {
-        'run_name':      run_name,
-        'seed':          args.seed,
-        'weights':       args.weights,
-        'test_acc':      test_acc,
-        'best_val_acc':  best_val_acc,
-        'per_class_acc': per_class_acc,
-        'train_time_s':  train_time_s,
+        'run_name':       run_name,
+        'seed':           args.seed,
+        'weights':        args.weights,
+        'test_acc':       test_acc,
+        'test_auc':       test_auc,
+        'best_val_acc':   best_val_acc,
+        'best_val_auc':   best_val_auc,
+        'per_class_acc':  per_class_acc,
+        'per_class_auc':  per_class_auc,
+        'train_time_s':   train_time_s,
     }
 
     os.makedirs(args.output_dir, exist_ok=True)

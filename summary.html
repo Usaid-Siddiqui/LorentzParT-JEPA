@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ParticleJEPA — Phase 1 Implementation Summary</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    padding: 40px 24px;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.9rem; font-weight: 700; color: #f0f4ff; letter-spacing: -0.5px; }
+  h2 { font-size: 1.2rem; font-weight: 600; color: #93c5fd; margin-bottom: 12px; }
+  h3 { font-size: 0.95rem; font-weight: 600; color: #a5b4fc; margin-bottom: 6px; }
+  .subtitle { color: #64748b; font-size: 0.95rem; margin-top: 4px; margin-bottom: 40px; }
+  .section { margin-bottom: 48px; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 9999px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .tag-phase0 { background: #1e3a5f; color: #7dd3fc; }
+  .tag-phase1 { background: #1e3a2f; color: #6ee7b7; }
+  .tag-new    { background: #3b1f5e; color: #c4b5fd; }
+
+  /* ── Pipeline diagram ── */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    padding: 24px 0 16px;
+  }
+  .pipe-box {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #1e2433; border: 1.5px solid #2d3553; border-radius: 12px;
+    padding: 14px 18px; min-width: 110px; text-align: center;
+    font-size: 0.8rem; color: #cbd5e1; gap: 6px; flex-shrink: 0;
+  }
+  .pipe-box.highlight {
+    background: #1a2e22; border: 2px solid #34d399;
+    box-shadow: 0 0 18px rgba(52, 211, 153, 0.25);
+  }
+  .pipe-box.dim { opacity: 0.45; }
+  .pipe-icon { font-size: 1.5rem; }
+  .pipe-label { font-weight: 600; color: #e2e8f0; font-size: 0.82rem; }
+  .pipe-sub { font-size: 0.7rem; color: #64748b; }
+  .arrow {
+    color: #475569; font-size: 1.4rem; flex-shrink: 0;
+    padding: 0 4px;
+  }
+  .arrow.green { color: #34d399; }
+
+  /* ── Gate anatomy ── */
+  .gate-anatomy {
+    display: flex; align-items: stretch; gap: 0;
+    background: #141923; border: 1px solid #2d3553; border-radius: 16px;
+    overflow: hidden; margin-top: 4px;
+  }
+  .gate-col {
+    flex: 1; padding: 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .gate-col + .gate-col { border-left: 1px solid #1e2433; }
+  .gate-col h3 { font-size: 0.8rem; }
+  .layer-pill {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #1e2433; border-radius: 8px; padding: 10px 14px;
+    font-size: 0.78rem; border-left: 3px solid transparent;
+  }
+  .layer-pill.linear { border-color: #60a5fa; }
+  .layer-pill.relu   { border-color: #f59e0b; }
+  .layer-pill.sigmoid { border-color: #34d399; }
+  .layer-pill .op { font-weight: 600; color: #e2e8f0; }
+  .layer-pill .dim { color: #475569; font-size: 0.72rem; }
+  .layer-arrow { color: #334155; text-align: center; font-size: 0.9rem; }
+
+  /* ── Math block ── */
+  .math-row {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;
+  }
+  .math-card {
+    background: #141923; border: 1px solid #2d3553; border-radius: 10px;
+    padding: 14px 18px; flex: 1; min-width: 200px;
+  }
+  .math-card .formula {
+    font-family: 'Courier New', monospace; font-size: 0.88rem;
+    color: #a5b4fc; margin-top: 4px;
+  }
+
+  /* ── Results table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  thead th {
+    background: #1e2433; color: #93c5fd; font-weight: 600;
+    padding: 10px 14px; text-align: left; border-bottom: 2px solid #2d3553;
+  }
+  tbody tr { border-bottom: 1px solid #1a2030; }
+  tbody tr:hover { background: #161d2d; }
+  tbody td { padding: 10px 14px; color: #cbd5e1; }
+  .win { color: #34d399; font-weight: 700; }
+  .loss { color: #ef4444; }
+  .neutral { color: #94a3b8; }
+
+  /* ── Badge ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 6px; font-size: 0.72rem; font-weight: 600;
+  }
+  .badge-green { background: #1a2e22; color: #6ee7b7; border: 1px solid #166534; }
+  .badge-blue  { background: #1e3a5f; color: #93c5fd; border: 1px solid #1d4ed8; }
+
+  /* ── U matrix viz ── */
+  .u-matrix-wrap {
+    display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;
+  }
+  .u-grid {
+    display: grid; grid-template-columns: repeat(5, 32px); gap: 3px;
+  }
+  .u-cell {
+    width: 32px; height: 32px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; font-weight: 600; color: #0f1117;
+  }
+  .u-label { font-size: 0.68rem; color: #64748b; }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid #1e2433; margin: 40px 0; }
+
+  /* ── File badge ── */
+  .file { display: inline-block; background: #1e2433; color: #7dd3fc; border-radius: 5px; padding: 1px 8px; font-family: monospace; font-size: 0.8rem; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .note {
+    background: #1a2234; border-left: 3px solid #3b82f6;
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    font-size: 0.83rem; color: #94a3b8; margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+
+<h1>ParticleJEPA — Implementation Progress</h1>
+<p class="subtitle">GSoC 2026 · ML4Sci · Usaid Siddiqui · June 2026</p>
+
+<!-- ═══════════════════════════════════════════
+     SECTION 1 — WHAT WE BUILT SO FAR
+     ═══════════════════════════════════════════ -->
+<div class="section">
+  <span class="tag tag-phase0">Phase 0 Complete</span>
+  <h2>What exists: the JEPA proof-of-concept</h2>
+
+  <p style="color:#94a3b8; font-size:0.88rem; margin-bottom:20px;">
+    The core JEPA pretraining loop was already working. Phase 0 established rigorous baseline numbers
+    across 3 seeds and 5 training conditions on the 100k JetClass subset.
+  </p>
+
+  <!-- Pipeline -->
+  <div class="pipeline">
+    <div class="pipe-box">
+      <div class="pipe-icon">📦</div>
+      <div class="pipe-label">Raw Input</div>
+      <div class="pipe-sub">(B, N, 4)<br>pT η φ E</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipe-box">
+      <div class="pipe-icon">⚙️</div>
+      <div class="pipe-label">Processor</div>
+      <div class="pipe-sub">multivectors<br>+ U matrix</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipe-box">
+      <div class="pipe-icon">🔒</div>
+      <div class="pipe-label">Mask</div>
+      <div class="pipe-sub">zero particle<br>at mask_idx</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipe-box">
+      <div class="pipe-icon">🧠</div>
+      <div class="pipe-label">Context<br>Encoder</div>
+      <div class="pipe-sub">trainable<br>(B, N, 128)</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipe-box">
+      <div class="pipe-icon">🔮</div>
+      <div class="pipe-label">Predictor</div>
+      <div class="pipe-sub">bottleneck 64<br>(B, 128)</div>
+    </div>
+    <div class="arrow">↔</div>
+    <div class="pipe-box">
+      <div class="pipe-icon">🎯</div>
+      <div class="pipe-label">EMA Target</div>
+      <div class="pipe-sub">frozen copy<br>(B, 128)</div>
+    </div>
+  </div>
+
+  <!-- Results table -->
+  <table style="margin-top:16px;">
+    <thead>
+      <tr>
+        <th>Condition</th>
+        <th>Test Accuracy</th>
+        <th>vs. Scratch</th>
+        <th>Note</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-green">JEPA → finetune</span></td>
+        <td class="win">29.56%</td>
+        <td class="win">+5.9 pp</td>
+        <td>Best on t→bqq by 31 pp over MAE</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">MAE → finetune</span></td>
+        <td>24.06%</td>
+        <td class="win">+0.4 pp</td>
+        <td>Reconstructs features; less relational</td>
+      </tr>
+      <tr>
+        <td>From scratch</td>
+        <td class="neutral">23.64%</td>
+        <td>—</td>
+        <td>Baseline</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════
+     SECTION 2 — WHAT WE ADDED: ATTENTION GATE
+     ═══════════════════════════════════════════ -->
+<div class="section">
+  <span class="tag tag-new">New · Phase 1</span>
+  <h2>What we added: Attention Gating</h2>
+
+  <p style="color:#94a3b8; font-size:0.88rem; margin-bottom:20px;">
+    The core insight: not all particles are equally relevant for predicting a masked particle.
+    A b-quark is more informative for predicting another b-quark than a soft wide-angle emission.
+    We add a learned scalar weight per particle — computed from the Lorentz-invariant
+    pairwise interaction matrix <strong style="color:#a5b4fc;">U</strong> — applied <em>before</em>
+    the context encoder sees the sequence.
+  </p>
+
+  <!-- New pipeline with gate highlighted -->
+  <div class="pipeline">
+    <div class="pipe-box dim">
+      <div class="pipe-icon">📦</div>
+      <div class="pipe-label">Input</div>
+      <div class="pipe-sub">(B, N, 4)</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipe-box dim">
+      <div class="pipe-icon">⚙️</div>
+      <div class="pipe-label">Processor</div>
+      <div class="pipe-sub">mv + U</div>
+    </div>
+    <div class="arrow green">→</div>
+    <div class="pipe-box highlight">
+      <div class="pipe-icon">🚪</div>
+      <div class="pipe-label">Attention<br>Gate</div>
+      <div class="pipe-sub" style="color:#6ee7b7;">NEW</div>
+    </div>
+    <div class="arrow green">⊗</div>
+    <div class="pipe-box highlight" style="background:#1e2a36; border-color:#60a5fa; box-shadow:0 0 18px rgba(96,165,250,0.2);">
+      <div class="pipe-icon">🧠</div>
+      <div class="pipe-label">Context<br>Encoder</div>
+      <div class="pipe-sub" style="color:#60a5fa;">gated input</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipe-box dim">
+      <div class="pipe-icon">🔮</div>
+      <div class="pipe-label">Predictor</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipe-box dim">
+      <div class="pipe-icon">📉</div>
+      <div class="pipe-label">JEPA Loss</div>
+    </div>
+  </div>
+
+  <div class="note">
+    ⊗ = element-wise multiply. The gate shape is (B, N, 1) — one scalar per particle.
+    It broadcasts over the 16 multivector dimensions: <code>context_mv = context_mv * gate</code>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SECTION 3 — WHERE DOES U COME FROM
+     ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Where does U come from?</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>U is computed by ParticleProcessor</h3>
+      <p style="color:#94a3b8; font-size:0.83rem; margin-bottom:12px;">
+        For every pair of particles (i, j) in the jet, the processor computes
+        four Lorentz-invariant geometric quantities from kt-clustering variables.
+        These encode the <em>structure of jet splittings</em> — the same variables
+        used on the Lund jet plane in particle physics.
+      </p>
+      <div class="math-row">
+        <div class="math-card">
+          <div class="u-label">Feature</div>
+          <div class="formula">ln Δ<sub>ij</sub></div>
+          <div style="color:#64748b; font-size:0.72rem; margin-top:4px;">angular distance</div>
+        </div>
+        <div class="math-card">
+          <div class="u-label">Feature</div>
+          <div class="formula">ln k<sub>T,ij</sub></div>
+          <div style="color:#64748b; font-size:0.72rem; margin-top:4px;">transverse momentum</div>
+        </div>
+        <div class="math-card">
+          <div class="u-label">Feature</div>
+          <div class="formula">ln z<sub>ij</sub></div>
+          <div style="color:#64748b; font-size:0.72rem; margin-top:4px;">energy fraction</div>
+        </div>
+        <div class="math-card">
+          <div class="u-label">Feature</div>
+          <div class="formula">ln m²<sub>ij</sub></div>
+          <div style="color:#64748b; font-size:0.72rem; margin-top:4px;">invariant mass</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>U shape: (B, N, N, 4)</h3>
+      <p style="color:#94a3b8; font-size:0.83rem; margin-bottom:12px;">
+        A 4-vector for every particle pair. Diagonal = 0 (self-interaction).
+        Padding pairs = −10⁹ (numerically excluded).
+      </p>
+
+      <!-- U matrix heatmap (5×5 illustration) -->
+      <div style="margin-bottom:8px;">
+        <div class="u-label" style="margin-bottom:6px;">Example: ln Δ channel (particle × particle)</div>
+        <div style="display:flex; gap:3px; align-items:flex-end; margin-bottom:4px;">
+          <div style="width:32px;"></div>
+          <div class="u-label" style="width:32px; text-align:center;">p₁</div>
+          <div class="u-label" style="width:32px; text-align:center;">p₂</div>
+          <div class="u-label" style="width:32px; text-align:center;">p₃</div>
+          <div class="u-label" style="width:32px; text-align:center;">p₄</div>
+          <div class="u-label" style="width:32px; text-align:center;">pad</div>
+        </div>
+        <div style="display:flex; gap:3px; flex-direction:column;">
+          <div style="display:flex; gap:3px; align-items:center;">
+            <div class="u-label" style="width:32px;">p₁</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553;">0</div>
+            <div class="u-cell" style="background:#1e4d7a;">.82</div>
+            <div class="u-cell" style="background:#1a3d60;">.61</div>
+            <div class="u-cell" style="background:#2a6ba0;">.95</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+          </div>
+          <div style="display:flex; gap:3px; align-items:center;">
+            <div class="u-label" style="width:32px;">p₂</div>
+            <div class="u-cell" style="background:#1e4d7a;">.82</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553;">0</div>
+            <div class="u-cell" style="background:#132c44;">.38</div>
+            <div class="u-cell" style="background:#163450;">.49</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+          </div>
+          <div style="display:flex; gap:3px; align-items:center;">
+            <div class="u-label" style="width:32px;">p₃</div>
+            <div class="u-cell" style="background:#1a3d60;">.61</div>
+            <div class="u-cell" style="background:#132c44;">.38</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553;">0</div>
+            <div class="u-cell" style="background:#1d4672;">.73</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+          </div>
+          <div style="display:flex; gap:3px; align-items:center;">
+            <div class="u-label" style="width:32px;">p₄</div>
+            <div class="u-cell" style="background:#2a6ba0;">.95</div>
+            <div class="u-cell" style="background:#163450;">.49</div>
+            <div class="u-cell" style="background:#1d4672;">.73</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553;">0</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+          </div>
+          <div style="display:flex; gap:3px; align-items:center;">
+            <div class="u-label" style="width:32px; color:#334155;">pad</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+            <div class="u-cell" style="background:#0f1117; border:1px solid #2d3553; color:#334155;">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="note" style="font-size:0.75rem;">
+        ParT originally uses U in its attention mechanism (additive bias to Q·Kᵀ).
+        We use U differently — to derive a per-particle <em>gate</em> instead.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SECTION 4 — ATTENTION GATE INTERNALS
+     ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>AttentionGate internals</h2>
+
+  <div class="gate-anatomy">
+
+    <!-- Step 1: Input -->
+    <div class="gate-col" style="flex:0.8; background:#141923;">
+      <h3>Input</h3>
+      <div class="layer-pill" style="background:#0f1117; border-left-color:#475569;">
+        <span class="op">U_context</span>
+        <span class="dim">(B, N, N, 4)</span>
+      </div>
+      <div class="layer-arrow">↓ mean over dim 2</div>
+      <div class="layer-pill" style="background:#0f1117; border-left-color:#475569;">
+        <span class="op">avg per particle</span>
+        <span class="dim">(B, N, 4)</span>
+      </div>
+      <div class="note" style="font-size:0.72rem; margin-top:8px;">
+        Mean-pool neighbors → each particle gets a 4-dim summary of its average geometric
+        relationship with the rest of the jet.
+      </div>
+    </div>
+
+    <!-- Step 2: MLP -->
+    <div class="gate-col" style="flex:1.2;">
+      <h3>MLP  <span style="color:#475569; font-weight:400;">· 3 layers</span></h3>
+
+      <div class="layer-pill linear">
+        <span class="op">Linear(4 → 16)</span>
+        <span class="dim">project up</span>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer-pill relu">
+        <span class="op">ReLU</span>
+        <span class="dim">non-linearity</span>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer-pill linear">
+        <span class="op">Linear(16 → 16)</span>
+        <span class="dim">hidden layer</span>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer-pill relu">
+        <span class="op">ReLU</span>
+        <span class="dim">non-linearity</span>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer-pill linear">
+        <span class="op">Linear(16 → 1)</span>
+        <span class="dim">collapse to scalar</span>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer-pill sigmoid">
+        <span class="op">Sigmoid</span>
+        <span class="dim">gate ∈ [0, 1]</span>
+      </div>
+    </div>
+
+    <!-- Step 3: Application -->
+    <div class="gate-col" style="flex:1;">
+      <h3>Output &amp; Application</h3>
+      <div class="layer-pill" style="background:#1a2e22; border-left-color:#34d399;">
+        <span class="op">gate</span>
+        <span class="dim">(B, N, 1)</span>
+      </div>
+      <div class="layer-arrow" style="font-size:1.1rem; color:#34d399;">⊗</div>
+      <div class="layer-pill" style="background:#0f1117; border-left-color:#475569;">
+        <span class="op">context_mv</span>
+        <span class="dim">(B, N, 16)</span>
+      </div>
+      <div class="layer-arrow" style="color:#34d399;">↓</div>
+      <div class="layer-pill" style="background:#1a2e22; border-left-color:#34d399;">
+        <span class="op">gated_mv</span>
+        <span class="dim">(B, N, 16)</span>
+      </div>
+
+      <div class="note" style="font-size:0.72rem; margin-top:8px;">
+        Gate shape (B,N,1) broadcasts over the 16 multivector dimensions.
+        A gate near 0 → encoder barely sees that particle.
+        A gate near 1 → encoder gets the full embedding.
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="u-label" style="margin-bottom:6px;">Illustrative gate values per particle</div>
+        <div style="display:flex; gap:5px; align-items:flex-end; height:60px;">
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;">
+            <div style="width:100%; height:52px; background:linear-gradient(to top, #34d399, #064e3b); border-radius:4px 4px 0 0;"></div>
+            <div class="u-label">p₁<br>.92</div>
+          </div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;">
+            <div style="width:100%; height:31px; background:linear-gradient(to top, #6ee7b7, #065f46); border-radius:4px 4px 0 0;"></div>
+            <div class="u-label">p₂<br>.55</div>
+          </div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;">
+            <div style="width:100%; height:10px; background:linear-gradient(to top, #a7f3d0, #d1fae5); border-radius:4px 4px 0 0;"></div>
+            <div class="u-label">p₃<br>.18</div>
+          </div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;">
+            <div style="width:100%; height:47px; background:linear-gradient(to top, #34d399, #064e3b); border-radius:4px 4px 0 0;"></div>
+            <div class="u-label">p₄<br>.83</div>
+          </div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;">
+            <div style="width:100%; height:5px; background:#1f2d24; border-radius:4px 4px 0 0;"></div>
+            <div class="u-label" style="color:#334155;">pad<br>.08</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SECTION 5 — FILES CHANGED
+     ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>Files changed</h2>
+  <div class="grid-2">
+    <div>
+      <h3 style="margin-bottom:10px;">New file</h3>
+      <div class="math-card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <span class="file">src/models/attention_gate.py</span>
+          <span class="badge badge-green">NEW</span>
+        </div>
+        <div style="color:#94a3b8; font-size:0.78rem;">
+          <code style="color:#6ee7b7;">AttentionGate</code> module — full docstring with physics motivation,
+          SE-Net reference, dimension annotations. ~80 lines.
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-bottom:10px;">Modified files</h3>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div class="math-card">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span class="file">src/models/jepa.py</span>
+            <span class="badge badge-blue">MOD</span>
+          </div>
+          <div style="color:#94a3b8; font-size:0.78rem; margin-top:6px;">
+            Added import, instantiation in <code>__init__</code>, gate application in <code>forward</code>,
+            updated module docstring.
+          </div>
+        </div>
+        <div class="math-card">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span class="file">src/models/__init__.py</span>
+            <span class="badge badge-blue">MOD</span>
+          </div>
+          <div style="color:#94a3b8; font-size:0.78rem; margin-top:6px;">
+            Added <code>from .attention_gate import AttentionGate</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:16px;">
+    <strong style="color:#7dd3fc;">How the gate trains:</strong>
+    No special loss — the gate's MLP parameters (4×16 + 16×16 + 16×1 = 336 weights) receive gradients
+    from the JEPA embedding loss via the context encoder. When a particle's gate is wrong,
+    the context encoder produces a bad prediction, the loss is high, and backprop adjusts the gate.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SECTION 6 — NEXT STEPS
+     ═══════════════════════════════════════════ -->
+<div class="section">
+  <h2>What's next</h2>
+  <div class="grid-2">
+    <div class="math-card">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <span style="font-size:1.2rem;">🧪</span>
+        <h3>Run Phase 1 experiments</h3>
+      </div>
+      <div style="color:#94a3b8; font-size:0.8rem;">
+        Compare JEPA+gate vs JEPA (no gate) across 3 seeds.
+        Hypothesis: gate improves representation quality for structurally complex decays (t→bqq, H→4q).
+      </div>
+    </div>
+    <div class="math-card">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <span style="font-size:1.2rem;">🎭</span>
+        <h3>Multi-particle masking (K=1,2,4)</h3>
+      </div>
+      <div style="color:#94a3b8; font-size:0.8rem;">
+        Currently mask 1 particle at a time. Masking K>1 simultaneously forces the predictor
+        to reason about multiple missing particles jointly — harder task, potentially richer representations.
+      </div>
+    </div>
+    <div class="math-card">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <span style="font-size:1.2rem;">📊</span>
+        <h3>Phase 2: Ablation sweep</h3>
+      </div>
+      <div style="color:#94a3b8; font-size:0.8rem;">
+        Predictor depth (2/4/6), bottleneck dim (32/64/128), EMA schedule,
+        loss variant (MSE / cosine / smooth-L1).
+      </div>
+    </div>
+    <div class="math-card">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <span style="font-size:1.2rem;">⚡</span>
+        <h3>Phase 3: Triton kernel for EquiLinear</h3>
+      </div>
+      <div style="color:#94a3b8; font-size:0.8rem;">
+        Profile forward+backward, locate bottleneck in L-GATr's 16-dim multivector contraction,
+        implement fused Triton kernel to reduce memory traffic on A100.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="color:#334155; font-size:0.72rem; text-align:center; margin-top:40px;">
+  ParticleJEPA · LorentzParT_JEPA · GSoC 2026 ML4Sci
+</div>
+
+</body>
+</html>

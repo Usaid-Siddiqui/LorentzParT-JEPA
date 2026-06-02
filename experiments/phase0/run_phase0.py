@@ -38,6 +38,7 @@ import yaml
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from sklearn.metrics import roc_auc_score
 
 from src.configs import LorentzParTConfig
 from src.models import LorentzParT
@@ -175,12 +176,17 @@ def evaluate_classifier(weights_path, data_dir, device, finetune_config='./confi
     y_true = np.concatenate(all_true, axis=0)
 
     acc = float((np.argmax(y_pred, 1) == np.argmax(y_true, 1)).mean())
+    auc = float(roc_auc_score(y_true, y_pred, average='macro', multi_class='ovo'))
     per_class = []
+    per_class_auc = []
     for i in range(10):
         mask = np.argmax(y_true, 1) == i
         per_class.append(float((np.argmax(y_pred[mask], 1) == i).mean()) if mask.sum() else 0.0)
+        per_class_auc.append(float(roc_auc_score(
+            (np.argmax(y_true, 1) == i).astype(int), y_pred[:, i]
+        )))
 
-    return {'test_acc': acc, 'per_class_acc': per_class}
+    return {'test_acc': acc, 'test_auc': auc, 'per_class_acc': per_class, 'per_class_auc': per_class_auc}
 
 
 @torch.no_grad()

@@ -88,7 +88,7 @@ def collect_per_class(all_results, condition):
 
 def print_summary_table(all_results):
     n = len(all_results)
-    cols = ['test_acc', 'best_val_acc', 'pretrain_time_s']
+    cols = ['test_auc', 'test_acc', 'best_val_acc', 'pretrain_time_s']
     col_w = 22
 
     header = f"{'Condition':<22}"
@@ -117,31 +117,42 @@ def print_summary_table(all_results):
     print(sep)
 
 
+def collect_per_class_metric(all_results, condition, key='per_class_acc'):
+    """Return (n_seeds, 10) array for per-class acc or auc."""
+    rows = []
+    for r in all_results:
+        pc = r.get('conditions', {}).get(condition, {}).get(key, [])
+        if len(pc) == 10:
+            rows.append(pc)
+    return np.array(rows) if rows else None
+
+
 def print_per_class_table(all_results):
-    print(f"\n{'Per-class accuracy  (mean ± std across seeds)'}")
     conds = ['jepa_finetune', 'mae_finetune', 'scratch']
-    header = f"{'Class':<14}"
-    for c in conds:
-        label = CONDITION_LABELS[c]
-        header += f"  {label:>20}"
-    print('─' * len(header))
-    print(header)
-    print('─' * len(header))
 
-    arrays = {c: collect_per_class(all_results, c) for c in conds}
-
-    for i, name in enumerate(CLASS_NAMES):
-        row = f"{name:<14}"
+    for metric_key, metric_label in [('per_class_auc', 'AUC'), ('per_class_acc', 'Accuracy')]:
+        print(f"\n{'Per-class ' + metric_label + '  (mean ± std across seeds)'}")
+        header = f"{'Class':<14}"
         for c in conds:
-            arr = arrays[c]
-            if arr is not None and arr.shape[0] > 0:
-                m, s = arr[:, i].mean(), arr[:, i].std()
-                row += f"  {m:>8.4f} ± {s:.4f}      "
-            else:
-                row += f"  {'N/A':>20}"
-        print(row)
+            header += f"  {CONDITION_LABELS[c]:>20}"
+        print('─' * len(header))
+        print(header)
+        print('─' * len(header))
 
-    print('─' * len(header))
+        arrays = {c: collect_per_class_metric(all_results, c, key=metric_key) for c in conds}
+
+        for i, name in enumerate(CLASS_NAMES):
+            row = f"{name:<14}"
+            for c in conds:
+                arr = arrays[c]
+                if arr is not None and arr.shape[0] > 0:
+                    m, s = arr[:, i].mean(), arr[:, i].std()
+                    row += f"  {m:>8.4f} ± {s:.4f}      "
+                else:
+                    row += f"  {'N/A':>20}"
+            print(row)
+
+        print('─' * len(header))
 
 
 def print_embedding_table(all_results):
@@ -166,11 +177,10 @@ def print_embedding_table(all_results):
 
 # ── Figures ───────────────────────────────────────────────────────────────────
 
-def plot_accuracy_bars(all_results, output_path):
+def _bar_plot(all_results, metric, ylabel, title, output_path):
     means, stds, labels, colors = [], [], [], []
-
     for cond in CONDITION_ORDER:
-        vals = collect(all_results, cond, 'test_acc')
+        vals = collect(all_results, cond, metric)
         if not vals:
             continue
         means.append(np.mean(vals))
@@ -182,7 +192,6 @@ def plot_accuracy_bars(all_results, output_path):
     x = np.arange(len(means))
     bars = ax.bar(x, means, yerr=stds, capsize=5,
                   color=colors, edgecolor='black', linewidth=0.8, alpha=0.9)
-
     for bar, m, s in zip(bars, means, stds):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
@@ -190,14 +199,10 @@ def plot_accuracy_bars(all_results, output_path):
             f'{m:.3f}',
             ha='center', va='bottom', fontsize=9, fontweight='bold',
         )
-
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=20, ha='right', fontsize=10)
-    ax.set_ylabel('Test Accuracy', fontsize=11)
-    ax.set_title(
-        f'Phase 0 — Test accuracy by condition  (n={len(all_results)} seeds, ±1 std)',
-        fontsize=11,
-    )
+    ax.set_ylabel(ylabel, fontsize=11)
+    ax.set_title(f'{title}  (n={len(all_results)} seeds, ±1 std)', fontsize=11)
     ax.set_ylim(0, min(1.0, max(means) * 1.3) if means else 1.0)
     ax.grid(axis='y', alpha=0.35)
     fig.tight_layout()
@@ -206,9 +211,14 @@ def plot_accuracy_bars(all_results, output_path):
     print(f"Saved → {output_path}")
 
 
-def plot_per_class_bars(all_results, output_path):
-    conds  = ['jepa_finetune', 'mae_finetune', 'scratch']
-    arrays = {c: collect_per_class(all_results, c) for c in conds}
+def plot_accuracy_bars(all_results, output_path):
+    _bar_plot(all_results, 'test_auc', 'Macro-OVO ROC AUC',
+              'Phase 0 — ROC AUC by condition', output_path)
+
+
+def _plot_per_class(all_results, metric_key, ylabel, title, output_path):
+    conds = ['jepa_finetune', 'mae_finetune', 'scratch']
+    arrays = {c: collect_per_class_metric(all_results, c, key=metric_key) for c in conds}
 
     x = np.arange(10)
     width = 0.28
@@ -228,14 +238,19 @@ def plot_per_class_bars(all_results, output_path):
 
     ax.set_xticks(x)
     ax.set_xticklabels(CLASS_NAMES, rotation=30, ha='right', fontsize=9)
-    ax.set_ylabel('Accuracy')
-    ax.set_title('Per-class accuracy by condition  (mean ± std)')
+    ax.set_ylabel(ylabel)
+    ax.set_title(f'{title}  (mean ± std)')
     ax.legend(fontsize=9)
     ax.grid(axis='y', alpha=0.35)
     fig.tight_layout()
     plt.savefig(output_path, dpi=300)
     plt.close()
     print(f"Saved → {output_path}")
+
+
+def plot_per_class_bars(all_results, output_path):
+    _plot_per_class(all_results, 'per_class_auc', 'ROC AUC',
+                    'Per-class ROC AUC by condition', output_path)
 
 
 def plot_embedding_stats(all_results, output_path):
@@ -276,8 +291,14 @@ def main():
     print_per_class_table(all_results)
     print_embedding_table(all_results)
 
-    plot_accuracy_bars(all_results,  os.path.join(out_dir, 'accuracy_bars.png'))
-    plot_per_class_bars(all_results, os.path.join(out_dir, 'per_class_bars.png'))
+    plot_accuracy_bars(all_results,  os.path.join(out_dir, 'auc_bars.png'))
+    _bar_plot(all_results, 'test_acc', 'Test Accuracy',
+              'Phase 0 — Test accuracy by condition',
+              os.path.join(out_dir, 'accuracy_bars.png'))
+    plot_per_class_bars(all_results, os.path.join(out_dir, 'per_class_auc_bars.png'))
+    _plot_per_class(all_results, 'per_class_acc', 'Accuracy',
+                    'Per-class accuracy by condition',
+                    os.path.join(out_dir, 'per_class_bars.png'))
     plot_embedding_stats(all_results, os.path.join(out_dir, 'embedding_stats.png'))
 
     print(f"\nAll figures saved to {out_dir}/")
