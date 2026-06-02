@@ -11,7 +11,9 @@ This forces the context encoder to learn about the *physics* of particle
 relationships rather than memorising low-level feature statistics.
 
 Architecture:
-  context_encoder  — trainable LorentzParTEncoder; sees zeroed masked particle
+  attention_gate   — small MLP; derives per-particle scalar weights from U
+                     and applies them to multivector embeddings before the encoder
+  context_encoder  — trainable LorentzParTEncoder; sees gated, zeroed masked particle
   target_encoder   — EMA copy of context_encoder (frozen); sees full input
   predictor        — narrow bottleneck transformer; maps context sequence →
                      predicted embedding at the masked position
@@ -35,6 +37,7 @@ from torch import Tensor
 from .lorentz_part import LorentzParTEncoder
 from .predictor import ParticlePredictor
 from .processor import ParticleProcessor
+from .attention_gate import AttentionGate
 
 
 class ParticleJEPA(nn.Module):
@@ -104,6 +107,9 @@ class ParticleJEPA(nn.Module):
             expansion_factor=expansion_factor,
             pair_embed_dims=pair_embed_dims,
         )
+
+        # Attention gate: soft per-particle importance weighting from U
+        self.attention_gate = AttentionGate()
 
         # Target encoder (frozen; updated via EMA after each step)
         self.target_encoder = copy.deepcopy(self.context_encoder)
@@ -182,6 +188,13 @@ class ParticleJEPA(nn.Module):
         # Each returns (multivectors, pairwise interaction features)
         full_mv, U_full = self.processor(x)
         context_mv, U_context = self.processor(masked_x)
+
+        # ---------- Attention gate ----------
+        # Derive per-particle scalar weights from pairwise interaction features,
+        # then apply multiplicatively to the multivector embeddings so the
+        # context encoder receives a geometry-weighted particle sequence.
+        gate = self.attention_gate(U_context)   # (B, N, 1)
+        context_mv = context_mv * gate          # (B, N, 16) — broadcasts over embed dim
 
         # ---------- Target encoder (no gradient) ----------
         with torch.no_grad():
