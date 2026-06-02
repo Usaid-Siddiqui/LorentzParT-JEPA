@@ -2,21 +2,9 @@
 
 Self-supervised pretraining for jet classification using a Joint-Embedding Predictive Architecture (JEPA). Built on [LorentzParT](https://medium.com/@thanhnguyen14401/gsoc-2025-with-ml4sci-event-classification-with-masked-transformer-autoencoders-6da369d42140) (Thanh Nguyen, GSoC 2025) — a Lorentz-equivariant particle transformer for the JetClass benchmark.
 
-**GSoC 2026 · ML4Sci**
 
 ---
 
-## Results
-
-| Condition | Test Accuracy (3 seeds) |
-|-----------|:-----------------------:|
-| **JEPA → finetune** | **31.25% ± 1.96%** |
-| Scratch | 28.26% ± 1.65% |
-| MAE → finetune | 24.76% ± 1.50% |
-
-100k-jet balanced subset of JetClass (10 classes). See [`experiments/phase0/`](experiments/phase0/) for full results.
-
----
 
 ## Architecture
 
