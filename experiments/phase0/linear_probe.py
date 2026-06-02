@@ -56,7 +56,7 @@ def parse_args():
     p.add_argument('--config-path', default='experiments/phase0/configs/linear_probe.yaml')
     p.add_argument('--run-name', default=None)
     p.add_argument('--seed', type=int, default=42)
-    p.add_argument('--output-dir', default='./results/phase0')
+    p.add_argument('--output-dir', default='./experiments/phase0/results')
     return p.parse_args()
 
 

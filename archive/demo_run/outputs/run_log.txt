@@ -1,0 +1,412 @@
+step: 50/1600 | embedding_loss: 1.201273 | ema_momentum: 0.99613
+epoch: 1/20 | train_loss: 0.947992 | val_loss: 0.224886
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 100/1600 | embedding_loss: 0.322851 | ema_momentum: 0.99625
+step: 150/1600 | embedding_loss: 0.239163 | ema_momentum: 0.99638
+epoch: 2/20 | train_loss: 0.228595 | val_loss: 0.039365
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 200/1600 | embedding_loss: 0.133029 | ema_momentum: 0.99650
+epoch: 3/20 | train_loss: 0.121629 | val_loss: 0.018658
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 250/1600 | embedding_loss: 0.100150 | ema_momentum: 0.99662
+step: 300/1600 | embedding_loss: 0.093253 | ema_momentum: 0.99675
+epoch: 4/20 | train_loss: 0.091069 | val_loss: 0.015888
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 350/1600 | embedding_loss: 0.080685 | ema_momentum: 0.99687
+step: 400/1600 | embedding_loss: 0.077834 | ema_momentum: 0.99700
+epoch: 5/20 | train_loss: 0.077834 | val_loss: 0.014913
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 450/1600 | embedding_loss: 0.071847 | ema_momentum: 0.99713
+epoch: 6/20 | train_loss: 0.070806 | val_loss: 0.013158
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 500/1600 | embedding_loss: 0.067270 | ema_momentum: 0.99725
+step: 550/1600 | embedding_loss: 0.066072 | ema_momentum: 0.99738
+epoch: 7/20 | train_loss: 0.065867 | val_loss: 0.012534
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 600/1600 | embedding_loss: 0.063421 | ema_momentum: 0.99750
+epoch: 8/20 | train_loss: 0.062983 | val_loss: 0.013100
+step: 650/1600 | embedding_loss: 0.061990 | ema_momentum: 0.99762
+step: 700/1600 | embedding_loss: 0.061202 | ema_momentum: 0.99775
+epoch: 9/20 | train_loss: 0.060773 | val_loss: 0.010985
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 750/1600 | embedding_loss: 0.058444 | ema_momentum: 0.99787
+step: 800/1600 | embedding_loss: 0.057484 | ema_momentum: 0.99800
+epoch: 10/20 | train_loss: 0.057484 | val_loss: 0.008496
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 850/1600 | embedding_loss: 0.055296 | ema_momentum: 0.99813
+epoch: 11/20 | train_loss: 0.054952 | val_loss: 0.008781
+step: 900/1600 | embedding_loss: 0.053769 | ema_momentum: 0.99825
+step: 950/1600 | embedding_loss: 0.053224 | ema_momentum: 0.99838
+epoch: 12/20 | train_loss: 0.053155 | val_loss: 0.007079
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 1000/1600 | embedding_loss: 0.052221 | ema_momentum: 0.99850
+epoch: 13/20 | train_loss: 0.051969 | val_loss: 0.009965
+step: 1050/1600 | embedding_loss: 0.051306 | ema_momentum: 0.99862
+step: 1100/1600 | embedding_loss: 0.051107 | ema_momentum: 0.99875
+epoch: 14/20 | train_loss: 0.051045 | val_loss: 0.010953
+step: 1150/1600 | embedding_loss: 0.050485 | ema_momentum: 0.99887
+step: 1200/1600 | embedding_loss: 0.050338 | ema_momentum: 0.99900
+epoch: 15/20 | train_loss: 0.050338 | val_loss: 0.009514
+step: 1250/1600 | embedding_loss: 0.050263 | ema_momentum: 0.99913
+epoch: 16/20 | train_loss: 0.050349 | val_loss: 0.006393
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 1300/1600 | embedding_loss: 0.050273 | ema_momentum: 0.99925
+step: 1350/1600 | embedding_loss: 0.050275 | ema_momentum: 0.99938
+epoch: 17/20 | train_loss: 0.050250 | val_loss: 0.006254
+  Saved context encoder weights → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 1400/1600 | embedding_loss: 0.050081 | ema_momentum: 0.99950
+epoch: 18/20 | train_loss: 0.050062 | val_loss: 0.006408
+step: 1450/1600 | embedding_loss: 0.049727 | ema_momentum: 0.99962
+step: 1500/1600 | embedding_loss: 0.049963 | ema_momentum: 0.99975
+epoch: 19/20 | train_loss: 0.049965 | val_loss: 0.006435
+step: 1550/1600 | embedding_loss: 0.049989 | ema_momentum: 0.99987
+step: 1600/1600 | embedding_loss: 0.049982 | ema_momentum: 1.00000
+epoch: 20/20 | train_loss: 0.049982 | val_loss: 0.006396
+
+Best model saved to: ./logs/ParticleJEPA/best/jepa_pretrain.pt
+step: 50/1600 | pT_loss: 0.7170 | eta_loss: 0.9768 | phi_loss: 0.3991 | energy_loss: 1.5275 | total_train_loss: 0.9051
+epoch: 1/20 | pT_loss: 0.4326 | eta_loss: 0.5539 | phi_loss: 0.4382 | energy_loss: 0.4359 | total_val_loss: 0.4651
+step: 100/1600 | pT_loss: 0.5977 | eta_loss: 0.4390 | phi_loss: 0.2059 | energy_loss: 0.6144 | total_train_loss: 0.4643
+step: 150/1600 | pT_loss: 0.5930 | eta_loss: 0.4027 | phi_loss: 0.1818 | energy_loss: 0.6177 | total_train_loss: 0.4488
+epoch: 2/20 | pT_loss: 0.4440 | eta_loss: 0.3241 | phi_loss: 0.2231 | energy_loss: 0.4644 | total_val_loss: 0.3639
+step: 200/1600 | pT_loss: 0.5553 | eta_loss: 0.3561 | phi_loss: 0.1543 | energy_loss: 0.5827 | total_train_loss: 0.4121
+epoch: 3/20 | pT_loss: 0.4202 | eta_loss: 0.3176 | phi_loss: 0.0849 | energy_loss: 0.4461 | total_val_loss: 0.3172
+step: 250/1600 | pT_loss: 0.5319 | eta_loss: 0.3301 | phi_loss: 0.1299 | energy_loss: 0.5599 | total_train_loss: 0.3879
+step: 300/1600 | pT_loss: 0.5295 | eta_loss: 0.3153 | phi_loss: 0.1224 | energy_loss: 0.5655 | total_train_loss: 0.3832
+epoch: 4/20 | pT_loss: 0.4337 | eta_loss: 0.1729 | phi_loss: 0.0890 | energy_loss: 0.4776 | total_val_loss: 0.2933
+step: 350/1600 | pT_loss: 0.5211 | eta_loss: 0.2955 | phi_loss: 0.1143 | energy_loss: 0.5601 | total_train_loss: 0.3728
+step: 400/1600 | pT_loss: 0.5135 | eta_loss: 0.2887 | phi_loss: 0.1105 | energy_loss: 0.5467 | total_train_loss: 0.3648
+epoch: 5/20 | pT_loss: 0.4168 | eta_loss: 0.1662 | phi_loss: 0.0820 | energy_loss: 0.4392 | total_val_loss: 0.2760
+step: 450/1600 | pT_loss: 0.4933 | eta_loss: 0.2763 | phi_loss: 0.0994 | energy_loss: 0.5316 | total_train_loss: 0.3501
+epoch: 6/20 | pT_loss: 0.3912 | eta_loss: 0.2335 | phi_loss: 0.0748 | energy_loss: 0.4184 | total_val_loss: 0.2795
+step: 500/1600 | pT_loss: 0.4785 | eta_loss: 0.2640 | phi_loss: 0.0923 | energy_loss: 0.5064 | total_train_loss: 0.3353
+step: 550/1600 | pT_loss: 0.4799 | eta_loss: 0.2593 | phi_loss: 0.0916 | energy_loss: 0.5118 | total_train_loss: 0.3357
+epoch: 7/20 | pT_loss: 0.4190 | eta_loss: 0.1721 | phi_loss: 0.0657 | energy_loss: 0.4172 | total_val_loss: 0.2685
+step: 600/1600 | pT_loss: 0.4641 | eta_loss: 0.2501 | phi_loss: 0.0861 | energy_loss: 0.5001 | total_train_loss: 0.3251
+epoch: 8/20 | pT_loss: 0.3850 | eta_loss: 0.1737 | phi_loss: 0.0564 | energy_loss: 0.4401 | total_val_loss: 0.2638
+step: 650/1600 | pT_loss: 0.4298 | eta_loss: 0.2434 | phi_loss: 0.0834 | energy_loss: 0.4555 | total_train_loss: 0.3030
+step: 700/1600 | pT_loss: 0.4496 | eta_loss: 0.2428 | phi_loss: 0.0809 | energy_loss: 0.4949 | total_train_loss: 0.3170
+epoch: 9/20 | pT_loss: 0.3648 | eta_loss: 0.1692 | phi_loss: 0.0532 | energy_loss: 0.3915 | total_val_loss: 0.2447
+step: 750/1600 | pT_loss: 0.4451 | eta_loss: 0.2370 | phi_loss: 0.0772 | energy_loss: 0.4869 | total_train_loss: 0.3116
+step: 800/1600 | pT_loss: 0.4399 | eta_loss: 0.2353 | phi_loss: 0.0754 | energy_loss: 0.4732 | total_train_loss: 0.3060
+epoch: 10/20 | pT_loss: 0.3463 | eta_loss: 0.1660 | phi_loss: 0.0517 | energy_loss: 0.3797 | total_val_loss: 0.2359
+step: 850/1600 | pT_loss: 0.4125 | eta_loss: 0.2325 | phi_loss: 0.0728 | energy_loss: 0.4529 | total_train_loss: 0.2926
+epoch: 11/20 | pT_loss: 0.3442 | eta_loss: 0.1635 | phi_loss: 0.0490 | energy_loss: 0.3950 | total_val_loss: 0.2379
+step: 900/1600 | pT_loss: 0.4010 | eta_loss: 0.2321 | phi_loss: 0.0704 | energy_loss: 0.4369 | total_train_loss: 0.2851
+step: 950/1600 | pT_loss: 0.3910 | eta_loss: 0.2330 | phi_loss: 0.0697 | energy_loss: 0.4320 | total_train_loss: 0.2814
+epoch: 12/20 | pT_loss: 0.3125 | eta_loss: 0.1570 | phi_loss: 0.0479 | energy_loss: 0.3434 | total_val_loss: 0.2152
+step: 1000/1600 | pT_loss: 0.3819 | eta_loss: 0.2300 | phi_loss: 0.0688 | energy_loss: 0.4179 | total_train_loss: 0.2746
+epoch: 13/20 | pT_loss: 0.3049 | eta_loss: 0.1608 | phi_loss: 0.0506 | energy_loss: 0.3377 | total_val_loss: 0.2135
+step: 1050/1600 | pT_loss: 0.3750 | eta_loss: 0.2330 | phi_loss: 0.0680 | energy_loss: 0.4258 | total_train_loss: 0.2755
+step: 1100/1600 | pT_loss: 0.3707 | eta_loss: 0.2304 | phi_loss: 0.0666 | energy_loss: 0.4218 | total_train_loss: 0.2723
+epoch: 14/20 | pT_loss: 0.2852 | eta_loss: 0.1610 | phi_loss: 0.0465 | energy_loss: 0.2865 | total_val_loss: 0.1948
+step: 1150/1600 | pT_loss: 0.3567 | eta_loss: 0.2284 | phi_loss: 0.0670 | energy_loss: 0.4043 | total_train_loss: 0.2641
+step: 1200/1600 | pT_loss: 0.3560 | eta_loss: 0.2298 | phi_loss: 0.0660 | energy_loss: 0.4022 | total_train_loss: 0.2635
+epoch: 15/20 | pT_loss: 0.2919 | eta_loss: 0.1571 | phi_loss: 0.0453 | energy_loss: 0.3466 | total_val_loss: 0.2102
+step: 1250/1600 | pT_loss: 0.3491 | eta_loss: 0.2299 | phi_loss: 0.0652 | energy_loss: 0.3806 | total_train_loss: 0.2562
+epoch: 16/20 | pT_loss: 0.2887 | eta_loss: 0.1579 | phi_loss: 0.0449 | energy_loss: 0.3196 | total_val_loss: 0.2028
+step: 1300/1600 | pT_loss: 0.3423 | eta_loss: 0.2282 | phi_loss: 0.0648 | energy_loss: 0.3760 | total_train_loss: 0.2528
+step: 1350/1600 | pT_loss: 0.3387 | eta_loss: 0.2275 | phi_loss: 0.0640 | energy_loss: 0.3727 | total_train_loss: 0.2507
+epoch: 17/20 | pT_loss: 0.2825 | eta_loss: 0.1573 | phi_loss: 0.0456 | energy_loss: 0.3099 | total_val_loss: 0.1988
+step: 1400/1600 | pT_loss: 0.3428 | eta_loss: 0.2258 | phi_loss: 0.0638 | energy_loss: 0.3896 | total_train_loss: 0.2555
+epoch: 18/20 | pT_loss: 0.2738 | eta_loss: 0.1571 | phi_loss: 0.0445 | energy_loss: 0.3081 | total_val_loss: 0.1959
+step: 1450/1600 | pT_loss: 0.3380 | eta_loss: 0.2235 | phi_loss: 0.0670 | energy_loss: 0.3853 | total_train_loss: 0.2534
+step: 1500/1600 | pT_loss: 0.3318 | eta_loss: 0.2252 | phi_loss: 0.0643 | energy_loss: 0.3762 | total_train_loss: 0.2493
+epoch: 19/20 | pT_loss: 0.2794 | eta_loss: 0.1588 | phi_loss: 0.0454 | energy_loss: 0.3102 | total_val_loss: 0.1985
+step: 1550/1600 | pT_loss: 0.3330 | eta_loss: 0.2254 | phi_loss: 0.0634 | energy_loss: 0.3828 | total_train_loss: 0.2512
+step: 1600/1600 | pT_loss: 0.3344 | eta_loss: 0.2252 | phi_loss: 0.0634 | energy_loss: 0.3738 | total_train_loss: 0.2492
+epoch: 20/20 | pT_loss: 0.2789 | eta_loss: 0.1586 | phi_loss: 0.0448 | energy_loss: 0.3131 | total_val_loss: 0.1989
+Early stopping at epoch 20. Best val_loss: 0.1948
+
+Best model saved to: ./logs/LorentzParT/best/mae_pretrain.pt
+step: 50/1600 | train_loss: 2.2308 | train_metric: 0.1526
+epoch: 1/20 | val_loss: 2.1089 | val_metric: 0.1927
+step: 100/1600 | train_loss: 2.0625 | train_metric: 0.2048
+step: 150/1600 | train_loss: 2.0488 | train_metric: 0.2078
+epoch: 2/20 | val_loss: 3.0981 | val_metric: 0.1105
+step: 200/1600 | train_loss: 2.0528 | train_metric: 0.2128
+epoch: 3/20 | val_loss: 2.0339 | val_metric: 0.2172
+step: 250/1600 | train_loss: 2.0346 | train_metric: 0.2099
+step: 300/1600 | train_loss: 2.0411 | train_metric: 0.2105
+epoch: 4/20 | val_loss: 2.4816 | val_metric: 0.1532
+step: 350/1600 | train_loss: 2.0250 | train_metric: 0.2180
+step: 400/1600 | train_loss: 2.0269 | train_metric: 0.2181
+epoch: 5/20 | val_loss: 2.0662 | val_metric: 0.2020
+step: 450/1600 | train_loss: 2.0102 | train_metric: 0.2215
+epoch: 6/20 | val_loss: 1.9950 | val_metric: 0.2293
+step: 500/1600 | train_loss: 1.9930 | train_metric: 0.2324
+step: 550/1600 | train_loss: 1.9966 | train_metric: 0.2303
+epoch: 7/20 | val_loss: 1.9895 | val_metric: 0.2341
+step: 600/1600 | train_loss: 1.9953 | train_metric: 0.2297
+epoch: 8/20 | val_loss: 2.9883 | val_metric: 0.1379
+step: 650/1600 | train_loss: 1.9971 | train_metric: 0.2299
+step: 700/1600 | train_loss: 1.9965 | train_metric: 0.2285
+epoch: 9/20 | val_loss: 1.9854 | val_metric: 0.2304
+step: 750/1600 | train_loss: 1.9906 | train_metric: 0.2347
+step: 800/1600 | train_loss: 1.9870 | train_metric: 0.2350
+epoch: 10/20 | val_loss: 1.9786 | val_metric: 0.2342
+step: 850/1600 | train_loss: 1.9781 | train_metric: 0.2354
+epoch: 11/20 | val_loss: 1.9701 | val_metric: 0.2431
+step: 900/1600 | train_loss: 1.9839 | train_metric: 0.2343
+step: 950/1600 | train_loss: 1.9741 | train_metric: 0.2366
+epoch: 12/20 | val_loss: 1.9597 | val_metric: 0.2387
+step: 1000/1600 | train_loss: 1.9746 | train_metric: 0.2374
+epoch: 13/20 | val_loss: 1.9591 | val_metric: 0.2500
+step: 1050/1600 | train_loss: 1.9628 | train_metric: 0.2461
+step: 1100/1600 | train_loss: 1.9654 | train_metric: 0.2434
+epoch: 14/20 | val_loss: 1.9461 | val_metric: 0.2542
+step: 1150/1600 | train_loss: 1.9529 | train_metric: 0.2495
+step: 1200/1600 | train_loss: 1.9531 | train_metric: 0.2529
+epoch: 15/20 | val_loss: 1.9311 | val_metric: 0.2614
+step: 1250/1600 | train_loss: 1.9320 | train_metric: 0.2648
+epoch: 16/20 | val_loss: 1.9098 | val_metric: 0.2808
+step: 1300/1600 | train_loss: 1.9037 | train_metric: 0.2798
+step: 1350/1600 | train_loss: 1.9078 | train_metric: 0.2784
+epoch: 17/20 | val_loss: 1.8927 | val_metric: 0.2857
+step: 1400/1600 | train_loss: 1.9024 | train_metric: 0.2839
+epoch: 18/20 | val_loss: 1.8786 | val_metric: 0.2937
+step: 1450/1600 | train_loss: 1.8804 | train_metric: 0.2849
+step: 1500/1600 | train_loss: 1.8827 | train_metric: 0.2888
+epoch: 19/20 | val_loss: 1.8735 | val_metric: 0.2962
+step: 1550/1600 | train_loss: 1.8748 | train_metric: 0.2954
+step: 1600/1600 | train_loss: 1.8778 | train_metric: 0.2937
+epoch: 20/20 | val_loss: 1.8720 | val_metric: 0.2967
+
+Best fine-tuned model saved to: ./logs/LorentzParT/best/jepa_finetune.pt
+Final val accuracy: 0.2967
+step: 50/1600 | train_loss: 2.1904 | train_metric: 0.1603
+epoch: 1/20 | val_loss: 2.0137 | val_metric: 0.2249
+step: 100/1600 | train_loss: 2.0140 | train_metric: 0.2239
+step: 150/1600 | train_loss: 2.0176 | train_metric: 0.2212
+epoch: 2/20 | val_loss: 2.0018 | val_metric: 0.2273
+step: 200/1600 | train_loss: 1.9918 | train_metric: 0.2322
+epoch: 3/20 | val_loss: 2.0485 | val_metric: 0.2305
+step: 250/1600 | train_loss: 1.9851 | train_metric: 0.2297
+step: 300/1600 | train_loss: 1.9795 | train_metric: 0.2328
+epoch: 4/20 | val_loss: 1.9744 | val_metric: 0.2317
+step: 350/1600 | train_loss: 1.9828 | train_metric: 0.2345
+step: 400/1600 | train_loss: 1.9808 | train_metric: 0.2350
+epoch: 5/20 | val_loss: 2.0086 | val_metric: 0.2311
+step: 450/1600 | train_loss: 1.9790 | train_metric: 0.2342
+epoch: 6/20 | val_loss: 2.1518 | val_metric: 0.2044
+step: 500/1600 | train_loss: 2.3456 | train_metric: 0.1159
+step: 550/1600 | train_loss: 2.2098 | train_metric: 0.1567
+epoch: 7/20 | val_loss: 2.1216 | val_metric: 0.1868
+step: 600/1600 | train_loss: 2.0951 | train_metric: 0.1981
+epoch: 8/20 | val_loss: 1.9881 | val_metric: 0.2341
+step: 650/1600 | train_loss: 1.9941 | train_metric: 0.2251
+step: 700/1600 | train_loss: 1.9918 | train_metric: 0.2256
+epoch: 9/20 | val_loss: 1.9714 | val_metric: 0.2378
+step: 750/1600 | train_loss: 1.9842 | train_metric: 0.2310
+step: 800/1600 | train_loss: 1.9796 | train_metric: 0.2335
+epoch: 10/20 | val_loss: 1.9681 | val_metric: 0.2382
+step: 850/1600 | train_loss: 1.9751 | train_metric: 0.2372
+epoch: 11/20 | val_loss: 1.9684 | val_metric: 0.2430
+step: 900/1600 | train_loss: 1.9827 | train_metric: 0.2349
+step: 950/1600 | train_loss: 1.9740 | train_metric: 0.2372
+epoch: 12/20 | val_loss: 1.9638 | val_metric: 0.2414
+step: 1000/1600 | train_loss: 1.9767 | train_metric: 0.2366
+epoch: 13/20 | val_loss: 1.9687 | val_metric: 0.2401
+step: 1050/1600 | train_loss: 1.9676 | train_metric: 0.2426
+step: 1100/1600 | train_loss: 1.9707 | train_metric: 0.2391
+epoch: 14/20 | val_loss: 1.9679 | val_metric: 0.2468
+step: 1150/1600 | train_loss: 1.9663 | train_metric: 0.2408
+step: 1200/1600 | train_loss: 1.9693 | train_metric: 0.2405
+epoch: 15/20 | val_loss: 1.9613 | val_metric: 0.2430
+step: 1250/1600 | train_loss: 1.9583 | train_metric: 0.2462
+epoch: 16/20 | val_loss: 1.9577 | val_metric: 0.2445
+step: 1300/1600 | train_loss: 1.9533 | train_metric: 0.2472
+step: 1350/1600 | train_loss: 1.9570 | train_metric: 0.2470
+epoch: 17/20 | val_loss: 1.9561 | val_metric: 0.2489
+step: 1400/1600 | train_loss: 1.9620 | train_metric: 0.2478
+epoch: 18/20 | val_loss: 1.9556 | val_metric: 0.2504
+step: 1450/1600 | train_loss: 1.9500 | train_metric: 0.2473
+step: 1500/1600 | train_loss: 1.9539 | train_metric: 0.2481
+epoch: 19/20 | val_loss: 1.9558 | val_metric: 0.2487
+step: 1550/1600 | train_loss: 1.9508 | train_metric: 0.2516
+step: 1600/1600 | train_loss: 1.9529 | train_metric: 0.2496
+epoch: 20/20 | val_loss: 1.9541 | val_metric: 0.2481
+
+Best fine-tuned model saved to: ./logs/LorentzParT/best/mae_finetune.pt
+Final val accuracy: 0.2504
+step: 50/1600 | train_loss: 2.3160 | train_metric: 0.1030
+epoch: 1/20 | val_loss: 2.2759 | val_metric: 0.1293
+step: 100/1600 | train_loss: 2.1570 | train_metric: 0.1752
+step: 150/1600 | train_loss: 2.1195 | train_metric: 0.1855
+epoch: 2/20 | val_loss: 2.0917 | val_metric: 0.1934
+step: 200/1600 | train_loss: 2.0564 | train_metric: 0.2070
+epoch: 3/20 | val_loss: 2.0765 | val_metric: 0.2124
+step: 250/1600 | train_loss: 2.0311 | train_metric: 0.2100
+step: 300/1600 | train_loss: 2.0245 | train_metric: 0.2190
+epoch: 4/20 | val_loss: 2.1855 | val_metric: 0.1857
+step: 350/1600 | train_loss: 2.0084 | train_metric: 0.2248
+step: 400/1600 | train_loss: 2.0072 | train_metric: 0.2236
+epoch: 5/20 | val_loss: 2.1216 | val_metric: 0.2107
+step: 450/1600 | train_loss: 2.0010 | train_metric: 0.2247
+epoch: 6/20 | val_loss: 2.4922 | val_metric: 0.1751
+step: 500/1600 | train_loss: 1.9829 | train_metric: 0.2338
+step: 550/1600 | train_loss: 1.9881 | train_metric: 0.2330
+epoch: 7/20 | val_loss: 1.9927 | val_metric: 0.2358
+step: 600/1600 | train_loss: 1.9849 | train_metric: 0.2322
+epoch: 8/20 | val_loss: 1.9810 | val_metric: 0.2362
+step: 650/1600 | train_loss: 1.9818 | train_metric: 0.2316
+step: 700/1600 | train_loss: 1.9805 | train_metric: 0.2336
+epoch: 9/20 | val_loss: 2.0543 | val_metric: 0.2126
+step: 750/1600 | train_loss: 1.9816 | train_metric: 0.2366
+step: 800/1600 | train_loss: 1.9779 | train_metric: 0.2357
+epoch: 10/20 | val_loss: 2.0028 | val_metric: 0.2262
+step: 850/1600 | train_loss: 2.0472 | train_metric: 0.2163
+epoch: 11/20 | val_loss: 1.9808 | val_metric: 0.2353
+step: 900/1600 | train_loss: 1.9942 | train_metric: 0.2303
+step: 950/1600 | train_loss: 1.9830 | train_metric: 0.2323
+epoch: 12/20 | val_loss: 1.9703 | val_metric: 0.2343
+step: 1000/1600 | train_loss: 1.9805 | train_metric: 0.2323
+epoch: 13/20 | val_loss: 2.8746 | val_metric: 0.1632
+step: 1050/1600 | train_loss: 1.9696 | train_metric: 0.2412
+step: 1100/1600 | train_loss: 1.9732 | train_metric: 0.2370
+epoch: 14/20 | val_loss: 2.0366 | val_metric: 0.2172
+step: 1150/1600 | train_loss: 1.9687 | train_metric: 0.2401
+step: 1200/1600 | train_loss: 1.9720 | train_metric: 0.2392
+epoch: 15/20 | val_loss: 1.9636 | val_metric: 0.2421
+step: 1250/1600 | train_loss: 1.9606 | train_metric: 0.2428
+epoch: 16/20 | val_loss: 1.9590 | val_metric: 0.2423
+step: 1300/1600 | train_loss: 1.9576 | train_metric: 0.2429
+step: 1350/1600 | train_loss: 1.9609 | train_metric: 0.2437
+epoch: 17/20 | val_loss: 1.9577 | val_metric: 0.2461
+step: 1400/1600 | train_loss: 1.9659 | train_metric: 0.2437
+epoch: 18/20 | val_loss: 1.9811 | val_metric: 0.2349
+step: 1450/1600 | train_loss: 1.9539 | train_metric: 0.2470
+step: 1500/1600 | train_loss: 1.9591 | train_metric: 0.2455
+epoch: 19/20 | val_loss: 1.9631 | val_metric: 0.2448
+step: 1550/1600 | train_loss: 1.9570 | train_metric: 0.2478
+step: 1600/1600 | train_loss: 1.9581 | train_metric: 0.2462
+epoch: 20/20 | val_loss: 1.9581 | val_metric: 0.2449
+
+Best fine-tuned model saved to: ./logs/LorentzParT/best/scratch.pt
+Final val accuracy: 0.2461
+test_loss: 1.8682 | test_metric: 0.2956
+
+==================================================
+Run:      jepa_finetune
+Weights:  ./logs/LorentzParT/best/jepa_finetune.pt
+Test loss:     1.8682
+Test accuracy: 0.2956 (29.56%)
+==================================================
+
+Per-class accuracy:
+  Class  0 (QCD/Z→νν    ): 0.2060
+  Class  1 (H→bb̄       ): 0.1350
+  Class  2 (H→cc̄       ): 0.1330
+  Class  3 (H→gg        ): 0.5300
+  Class  4 (H→4q        ): 0.2810
+  Class  5 (H→ℓνqq′     ): 0.2190
+  Class  6 (Z→qq̄       ): 0.1320
+  Class  7 (W→qq′       ): 0.4150
+  Class  8 (t→bqq′      ): 0.5790
+  Class  9 (t→bℓν       ): 0.3260
+test_loss: 1.9559 | test_metric: 0.2406
+
+==================================================
+Run:      mae_finetune
+Weights:  ./logs/LorentzParT/best/mae_finetune.pt
+Test loss:     1.9559
+Test accuracy: 0.2406 (24.06%)
+==================================================
+
+Per-class accuracy:
+  Class  0 (QCD/Z→νν    ): 0.1430
+  Class  1 (H→bb̄       ): 0.1440
+  Class  2 (H→cc̄       ): 0.1730
+  Class  3 (H→gg        ): 0.5460
+  Class  4 (H→4q        ): 0.2630
+  Class  5 (H→ℓνqq′     ): 0.2610
+  Class  6 (Z→qq̄       ): 0.0330
+  Class  7 (W→qq′       ): 0.3870
+  Class  8 (t→bqq′      ): 0.1950
+  Class  9 (t→bℓν       ): 0.2610
+test_loss: 1.9602 | test_metric: 0.2364
+
+==================================================
+Run:      scratch
+Weights:  ./logs/LorentzParT/best/scratch.pt
+Test loss:     1.9602
+Test accuracy: 0.2364 (23.64%)
+==================================================
+
+Per-class accuracy:
+  Class  0 (QCD/Z→νν    ): 0.1370
+  Class  1 (H→bb̄       ): 0.1230
+  Class  2 (H→cc̄       ): 0.2350
+  Class  3 (H→gg        ): 0.4780
+  Class  4 (H→4q        ): 0.3590
+  Class  5 (H→ℓνqq′     ): 0.2740
+  Class  6 (Z→qq̄       ): 0.0120
+  Class  7 (W→qq′       ): 0.3240
+  Class  8 (t→bqq′      ): 0.1150
+  Class  9 (t→bℓν       ): 0.3070
+
+============================================================
+STAGE: JEPA Pretraining
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/pretrain_jepa.py --data-dir ./data --config-path configs/pretrain_jepa.yaml --run-name jepa_pretrain --seed 42
+============================================================
+
+JEPA encoder weights: ./logs/ParticleJEPA/best/jepa_pretrain.pt
+
+============================================================
+STAGE: MAE Pretraining
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/pretrain_mae.py --data-dir ./data --config-path configs/pretrain_mae.yaml --run-name mae_pretrain --seed 42
+============================================================
+
+MAE encoder weights: ./logs/LorentzParT/best/mae_pretrain.pt
+
+Pretraining convergence plot saved to: ./outputs/pretrain_convergence_comparison.png
+
+============================================================
+STAGE: Fine-tune (JEPA pretrained)
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/finetune.py --data-dir ./data --config-path configs/finetune.yaml --weights ./logs/ParticleJEPA/best/jepa_pretrain.pt --run-name jepa_finetune --seed 42
+============================================================
+
+============================================================
+STAGE: Fine-tune (MAE pretrained)
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/finetune.py --data-dir ./data --config-path configs/finetune.yaml --weights ./logs/LorentzParT/best/mae_pretrain.pt --run-name mae_finetune --seed 42
+============================================================
+
+============================================================
+STAGE: Fine-tune (from scratch)
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/finetune.py --data-dir ./data --config-path configs/finetune.yaml --run-name scratch --seed 42
+============================================================
+
+============================================================
+STAGE: Evaluate (jepa_finetune)
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/evaluate.py --data-dir ./data --weights ./logs/LorentzParT/best/jepa_finetune.pt --run-name jepa_finetune --outputs-dir ./outputs
+============================================================
+
+============================================================
+STAGE: Evaluate (mae_finetune)
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/evaluate.py --data-dir ./data --weights ./logs/LorentzParT/best/mae_finetune.pt --run-name mae_finetune --outputs-dir ./outputs
+============================================================
+
+============================================================
+STAGE: Evaluate (scratch)
+CMD:   /home/jovyan/demo/LorentzParT-JEPA/.venv/bin/python scripts/evaluate.py --data-dir ./data --weights ./logs/LorentzParT/best/scratch.pt --run-name scratch --outputs-dir ./outputs
+============================================================
+
+============================================================
+COMPARISON COMPLETE
+============================================================
+
+Plots saved to: ./outputs/
+  pretrain_convergence_comparison.png  ← val loss vs epoch + wall-clock time
+  jepa_finetune_roc_curve.png
+  jepa_finetune_confusion_matrix.png
+  mae_finetune_roc_curve.png
+  mae_finetune_confusion_matrix.png
+  scratch_roc_curve.png
+  scratch_confusion_matrix.png
+
+Model weights:
+  JEPA pretrained  → ./logs/ParticleJEPA/best/jepa_pretrain.pt
+  MAE pretrained   → ./logs/LorentzParT/best/mae_pretrain.pt
+  JEPA fine-tuned  → ./logs/LorentzParT/best/jepa_finetune.pt
+  MAE fine-tuned   → ./logs/LorentzParT/best/mae_finetune.pt
+  Scratch          → ./logs/LorentzParT/best/scratch.pt

@@ -1,6 +1,7 @@
 # Generated data and model outputs
 data/
-logs/
+logs/*
+!logs/.gitkeep
 outputs/*.txt
 outputs/*.csv
 

@@ -3,7 +3,7 @@ One-off script to backfill best_val_acc and pretrain_time_s into existing
 seed JSON files that were produced when CSVs had no header row.
 
 Run from LorentzParT_JEPA/ root:
-    python experiments/phase0/patch_results.py --results-dir ./results/phase0
+    python experiments/phase0/patch_results.py --results-dir ./experiments/phase0/results
 """
 
 import os
@@ -62,7 +62,7 @@ def read_last(path, column, fallback_cols=None):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument('--results-dir', default='./results/phase0')
+    p.add_argument('--results-dir', default='./experiments/phase0/results')
     return p.parse_args()
 
 
