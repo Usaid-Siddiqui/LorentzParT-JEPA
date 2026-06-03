@@ -1,7 +1,5 @@
-# Configuration for ParticleJEPA self-supervised pretraining on the 100k JetClass subset.
-#
-# The context encoder and target encoder share the same architecture as LorentzParT.
-# The predictor is a narrow bottleneck transformer that prevents collapse.
+# JEPA pretraining with biased masking — high-pT particles masked more frequently.
+# Identical to pretrain_jepa.yaml except mask_mode: biased.
 
 model:
   name: particle_jepa
@@ -25,7 +23,7 @@ model:
     ema_momentum_end: 1.0       # approaches frozen at end of training
     use_attention_gate: true    # set false to ablate gating and run vanilla JEPA
     num_mask: 1                 # number of particles to mask per jet (1, 2, or 4)
-    mask_mode: random           # masking distribution: random or biased (high-pT favored)
+    mask_mode: biased           # masking distribution: random or biased (high-pT favored)
 
 train:
   batch_size: 1000
