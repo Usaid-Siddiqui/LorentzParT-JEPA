@@ -175,46 +175,47 @@ class ParticleJEPA(nn.Module):
             Target encoder's embedding at the masked position (detached).
         """
         B, N, F = x.shape
-        batch_idx = torch.arange(B, device=x.device)
+        device = x.device
+        batch_idx = torch.arange(B, device=device)
+
+        # ---------- Normalise mask_idx to (B, K) ----------
+        # Trainer squeezes (B, 1) → (B,) for K=1; unsqueeze back for uniform handling
+        if mask_idx.dim() == 1:
+            mask_idx = mask_idx.unsqueeze(1)   # (B,) → (B, 1)
+        K = mask_idx.shape[1]                  # number of masked particles
 
         # ---------- Build padding masks ----------
         # Valid particles: energy > 0  →  padding_mask = 0 (attend)
         # Padding particles: energy == 0  →  padding_mask = 1 (ignore)
         full_padding_mask = (x[..., 3] == 0).float()   # (B, N)
 
-        # For context encoder: also zero out the masked particle's features
-        # but keep its padding_mask = 0 so it remains visible to the encoder
-        # (the encoder needs to learn what's at that position from context)
+        # Zero out all K masked particles; keep their padding_mask = 0
+        # so the encoder knows a particle exists at those positions
         masked_x = x.clone()
-        masked_x[batch_idx, mask_idx] = 0.0
-
         context_padding_mask = full_padding_mask.clone()
-        context_padding_mask[batch_idx, mask_idx] = 0.0  # keep masked pos active
+        for k in range(K):
+            masked_x[batch_idx, mask_idx[:, k]] = 0.0
+            context_padding_mask[batch_idx, mask_idx[:, k]] = 0.0
 
         # ---------- Process inputs ----------
-        # Each returns (multivectors, pairwise interaction features)
         full_mv, U_full = self.processor(x)
         context_mv, U_context = self.processor(masked_x)
 
         # ---------- Attention gate (optional) ----------
-        # Derive per-particle scalar weights from pairwise interaction features,
-        # then apply multiplicatively to the multivector embeddings so the
-        # context encoder receives a geometry-weighted particle sequence.
         if self.use_attention_gate:
             gate = self.attention_gate(U_context)   # (B, N, 1)
-            context_mv = context_mv * gate          # (B, N, 16) — broadcasts over embed dim
+            context_mv = context_mv * gate          # (B, N, 16)
 
         # ---------- Target encoder (no gradient) ----------
         with torch.no_grad():
             target_out = self.target_encoder(full_mv, full_padding_mask, U_full)
-            # target_out: (B, N, embed_dim)
-            target_embed = target_out[batch_idx, mask_idx]   # (B, embed_dim)
+            # Extract K target embeddings per jet: (B, K, embed_dim)
+            target_embed = target_out[batch_idx.unsqueeze(1), mask_idx]
 
         # ---------- Context encoder (trainable) ----------
         context_out = self.context_encoder(context_mv, context_padding_mask, U_context)
-        # context_out: (B, N, embed_dim)
 
         # ---------- Predictor ----------
-        predicted_embed = self.predictor(context_out, mask_idx)   # (B, embed_dim)
+        predicted_embed = self.predictor(context_out, mask_idx)   # (B, K, embed_dim)
 
         return predicted_embed, target_embed.detach()

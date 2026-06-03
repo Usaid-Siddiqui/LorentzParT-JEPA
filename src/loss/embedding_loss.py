@@ -43,10 +43,10 @@ class EmbeddingLoss(nn.Module):
         """
         Parameters
         ----------
-        pred : Tensor, shape (B, embed_dim)
-            Predictor output for the masked particle position.
-        target : Tensor, shape (B, embed_dim)
-            Target encoder embedding at the masked particle position (detached).
+        pred : Tensor, shape (B, K, embed_dim) or (B, embed_dim)
+            Predictor output for the masked particle positions.
+        target : Tensor, shape (B, K, embed_dim) or (B, embed_dim)
+            Target encoder embeddings at the masked positions (detached).
 
         Returns
         -------
@@ -54,7 +54,10 @@ class EmbeddingLoss(nn.Module):
         components : tuple of Tensor
             Single-element tuple (loss,) for compatibility with trainer logging.
         """
-        pred_norm = self.norm_pred(pred)
+        # Flatten (B, K, D) → (B*K, D) so LayerNorm and MSE work over all K positions
+        pred   = pred.reshape(-1, pred.shape[-1])
+        target = target.reshape(-1, target.shape[-1])
+        pred_norm   = self.norm_pred(pred)
         target_norm = self.norm_target(target)
         loss = F.mse_loss(pred_norm, target_norm)
         return loss, (loss,)

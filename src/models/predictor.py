@@ -90,37 +90,41 @@ class ParticlePredictor(nn.Module):
         ----------
         encoder_output : Tensor, shape (B, N, encoder_dim)
             Full sequence output from the context encoder (masked input).
-        mask_idx : Tensor, shape (B,) dtype long
-            Index of the masked particle in each batch item.
+        mask_idx : Tensor, shape (B, K), dtype long
+            Indices of the K masked particles per batch item.
 
         Returns
         -------
-        prediction : Tensor, shape (B, encoder_dim)
-            Predicted embedding for the masked particle position.
+        prediction : Tensor, shape (B, K, encoder_dim)
+            Predicted embeddings for all masked particle positions.
         """
         B, N, _ = encoder_output.shape
         device = encoder_output.device
+        K = mask_idx.shape[1]
 
         # Project all positions to predictor dimension
-        x = self.input_proj(encoder_output)           # (B, N, predictor_dim)
+        x = self.input_proj(encoder_output)                    # (B, N, predictor_dim)
 
         # Add positional embeddings to all positions
-        positions = torch.arange(N, device=device)    # (N,)
-        x = x + self.pos_embed(positions).unsqueeze(0)  # (B, N, predictor_dim)
+        positions = torch.arange(N, device=device)
+        x = x + self.pos_embed(positions).unsqueeze(0)         # (B, N, predictor_dim)
 
-        # Replace the masked position with mask_token + its positional embedding
+        # Replace each masked position with mask_token + its positional embedding
+        # Loop over K — each pass injects one mask token into the shared sequence
         batch_idx = torch.arange(B, device=device)
-        mask_pos_embed = self.pos_embed(mask_idx)     # (B, predictor_dim)
-        x[batch_idx, mask_idx] = self.mask_token.unsqueeze(0) + mask_pos_embed
+        for k in range(K):
+            idx_k = mask_idx[:, k]                             # (B,)
+            pos_embed_k = self.pos_embed(idx_k)                # (B, predictor_dim)
+            x[batch_idx, idx_k] = self.mask_token + pos_embed_k
 
-        # Run through transformer
-        x = self.transformer(x)                        # (B, N, predictor_dim)
+        # Run through transformer (all K mask tokens attend to each other + context)
+        x = self.transformer(x)                                # (B, N, predictor_dim)
         x = self.norm(x)
 
-        # Extract prediction at the masked position only
-        pred = x[batch_idx, mask_idx]                  # (B, predictor_dim)
+        # Extract predictions at all K masked positions
+        preds = torch.stack(
+            [self.output_proj(x[batch_idx, mask_idx[:, k]]) for k in range(K)],
+            dim=1,
+        )                                                      # (B, K, encoder_dim)
 
-        # Project back to encoder dimension
-        pred = self.output_proj(pred)                  # (B, encoder_dim)
-
-        return pred
+        return preds

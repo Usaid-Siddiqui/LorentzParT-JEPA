@@ -33,6 +33,11 @@ class NpyJetClassDataset(Dataset):
         ``'random'``, ``'biased'``, ``'first'`` or ``None``.
         When set, __getitem__ returns ``(masked_particles, masked_target, mask_idx)``.
         When ``None``, returns ``(particles, label)``.
+    num_mask : int, optional
+        Number of particles to mask per jet (default 1). Only used when
+        ``mask_mode`` is set. For K>1, particles are sampled without replacement.
+        ``biased`` mode applies biased sampling for the first particle only;
+        remaining K-1 are sampled randomly.
     """
 
     def __init__(
@@ -42,6 +47,7 @@ class NpyJetClassDataset(Dataset):
         normalize: List[bool] = [True, False, False, True],
         norm_dict: Optional[Dict[str, Tuple[float, float]]] = None,
         mask_mode: Optional[str] = None,
+        num_mask: int = 1,
     ):
         super().__init__()
         self.X_particles = np.load(particles_path)   # (N, 4, 128)
@@ -49,6 +55,7 @@ class NpyJetClassDataset(Dataset):
         self.normalize = normalize
         self.norm_dict = norm_dict
         self.mask_mode = mask_mode
+        self.num_mask = num_mask
 
         # Pre-build norm arrays for fast broadcasting
         self._feat_names = ['pT', 'eta', 'phi', 'energy']
@@ -79,30 +86,30 @@ class NpyJetClassDataset(Dataset):
         return arr
 
     def _mask_particle(
-        self, particles: np.ndarray, mode: str = 'random'
+        self, particles: np.ndarray, mode: str = 'random', num_mask: int = 1,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         valid_idx = np.where(np.any(particles != 0, axis=1))[0]
 
-        if mode == 'random':
-            mask_idx = np.array([np.random.choice(valid_idx)])
-        elif mode == 'biased':
+        if mode == 'first':
+            mask_idx = valid_idx[:num_mask]
+        elif mode == 'biased' and num_mask == 1:
+            # Rejection sampling biased toward low indices (high-pT particles)
             total = np.sum(1 / (np.arange(particles.shape[0]) + 1))
-            mask_idx = 127
+            idx = 127
             u, w = 0, 1
-            while (u < w) or (mask_idx not in valid_idx):
+            while (u < w) or (idx not in valid_idx):
                 u = np.random.uniform()
-                mask_idx = np.random.randint(0, particles.shape[0])
-                w = (1 / (mask_idx + 1)) / total
-            mask_idx = np.array([mask_idx])
-        elif mode == 'first':
-            mask_idx = valid_idx[:1]
+                idx = np.random.randint(0, particles.shape[0])
+                w = (1 / (idx + 1)) / total
+            mask_idx = np.array([idx])
         else:
-            mask_idx = np.array([np.random.choice(valid_idx)])
+            # random (default) and biased K>1: sample without replacement
+            mask_idx = np.random.choice(valid_idx, size=num_mask, replace=False)
 
         masked_particles = particles.copy()
         masked_targets = masked_particles[mask_idx, :].copy()
         masked_particles[mask_idx, :] = 0.0
-        return masked_particles, masked_targets, mask_idx
+        return masked_particles, masked_targets, mask_idx   # mask_idx shape: (K,)
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, ...]:
         part = self.X_particles[idx].T.copy()   # (128, 4)
@@ -110,14 +117,15 @@ class NpyJetClassDataset(Dataset):
 
         if self.mask_mode is not None:
             masked_particles, masked_targets, mask_idx = self._mask_particle(
-                part, self.mask_mode
+                part, self.mask_mode, self.num_mask
             )
             self._apply_norm(masked_particles)
             self._apply_norm(masked_targets)
+            # masked_targets: (K, 4) for K>1, squeeze to (4,) for K=1 (MAE compat)
             return (
                 torch.from_numpy(masked_particles).float(),
                 torch.from_numpy(masked_targets.squeeze(0)).float(),
-                torch.tensor(mask_idx, dtype=torch.int64),
+                torch.tensor(mask_idx, dtype=torch.int64),  # (K,)
             )
 
         self._apply_norm(part)
