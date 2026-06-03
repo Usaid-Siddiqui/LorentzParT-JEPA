@@ -80,6 +80,7 @@ class JEPAConfig(BaseModelConfig):
     predictor_dropout: float = 0.1
     ema_momentum_start: float = 0.996
     ema_momentum_end: float = 1.0
+    use_attention_gate: bool = True
 
     @classmethod
     def from_dict(cls, d: Dict):
@@ -95,6 +96,7 @@ class JEPAConfig(BaseModelConfig):
             jepa = flat.pop('jepa')
             flat.setdefault('ema_momentum_start', jepa.get('ema_momentum_start', 0.996))
             flat.setdefault('ema_momentum_end', jepa.get('ema_momentum_end', 1.0))
+            flat.setdefault('use_attention_gate', jepa.get('use_attention_gate', True))
         # Only pass fields that JEPAConfig actually declares
         valid_fields = set(cls.__dataclass_fields__.keys())
         return cls(**{k: v for k, v in flat.items() if k in valid_fields})

@@ -99,6 +99,7 @@ def main(rank, world_size, seed, config_path, data_dir, checkpoint_path=None, ru
         predictor_dropout=model_cfg.predictor_dropout,
         max_num_particles=model_cfg.max_num_particles,
         ema_momentum=model_cfg.ema_momentum_start,
+        use_attention_gate=model_cfg.use_attention_gate,
     ).to(device)
 
     # Trainer

@@ -71,6 +71,10 @@ class ParticleJEPA(nn.Module):
     ema_momentum : float
         Starting EMA momentum for target encoder update (default 0.996).
         Values close to 1 → slow update (stable target).
+    use_attention_gate : bool
+        If True, applies a learned per-particle scalar gate (derived from U)
+        to the context encoder's multivector inputs before encoding (default True).
+        Set to False to ablate the gating and run vanilla JEPA.
     """
 
     def __init__(
@@ -87,6 +91,7 @@ class ParticleJEPA(nn.Module):
         predictor_dropout: float = 0.1,
         max_num_particles: int = 128,
         ema_momentum: float = 0.996,
+        use_attention_gate: bool = True,
     ):
         super().__init__()
 
@@ -94,6 +99,7 @@ class ParticleJEPA(nn.Module):
             pair_embed_dims = [64, 64, 64]
 
         self.ema_momentum = ema_momentum
+        self.use_attention_gate = use_attention_gate
 
         # Shared processor: computes multivectors + pairwise interaction features
         self.processor = ParticleProcessor(to_multivector=True)
@@ -109,6 +115,7 @@ class ParticleJEPA(nn.Module):
         )
 
         # Attention gate: soft per-particle importance weighting from U
+        # Instantiated regardless; only applied when use_attention_gate=True
         self.attention_gate = AttentionGate()
 
         # Target encoder (frozen; updated via EMA after each step)
@@ -189,12 +196,13 @@ class ParticleJEPA(nn.Module):
         full_mv, U_full = self.processor(x)
         context_mv, U_context = self.processor(masked_x)
 
-        # ---------- Attention gate ----------
+        # ---------- Attention gate (optional) ----------
         # Derive per-particle scalar weights from pairwise interaction features,
         # then apply multiplicatively to the multivector embeddings so the
         # context encoder receives a geometry-weighted particle sequence.
-        gate = self.attention_gate(U_context)   # (B, N, 1)
-        context_mv = context_mv * gate          # (B, N, 16) — broadcasts over embed dim
+        if self.use_attention_gate:
+            gate = self.attention_gate(U_context)   # (B, N, 1)
+            context_mv = context_mv * gate          # (B, N, 16) — broadcasts over embed dim
 
         # ---------- Target encoder (no gradient) ----------
         with torch.no_grad():

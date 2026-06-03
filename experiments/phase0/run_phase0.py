@@ -71,7 +71,7 @@ def parse_args():
     p.add_argument('--gpu',              type=int, default=0)
     p.add_argument('--pretrain-config',  default='./configs/pretrain_jepa.yaml')
     p.add_argument('--mae-config',       default='./configs/pretrain_mae.yaml')
-    p.add_argument('--finetune-config',  default='./configs/finetune.yaml')
+    p.add_argument('--finetune-config',  default='./configs/train_lorentz_part.yaml')
     p.add_argument('--probe-config',     default='./experiments/phase0/configs/linear_probe.yaml')
     p.add_argument('--skip-pretrain',    action='store_true')
     p.add_argument('--skip-finetune',    action='store_true')
@@ -146,7 +146,7 @@ def read_last_csv(path, column, fallback_cols=None):
 # ── Inline evaluation (avoids subprocess stdout parsing) ─────────────────────
 
 @torch.no_grad()
-def evaluate_classifier(weights_path, data_dir, device, finetune_config='./configs/finetune.yaml'):
+def evaluate_classifier(weights_path, data_dir, device, finetune_config='./configs/train_lorentz_part.yaml'):
     """Load a fine-tuned LorentzParT model and evaluate on the test set."""
     with open(finetune_config) as f:
         config = yaml.safe_load(f)
@@ -264,7 +264,7 @@ def run_seed(seed, args, python, env):
             (f'mae_ft_seed{seed}',  mae_ckpt),
             (f'scratch_seed{seed}', None),
         ]:
-            cmd = [python, 'scripts/finetune.py',
+            cmd = [python, 'scripts/train_lorentz_part.py',
                    '--data-dir', args.data_dir, '--config-path', args.finetune_config,
                    '--run-name', run_name, '--seed', seed]
             if weights:
