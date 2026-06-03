@@ -1,0 +1,62 @@
+# Configuration for LorentzGATr supervised classification on JetClass.
+#
+# LorentzGATr uses the full L-GATr backbone (every block operates in the
+# Cl(1,3) geometric algebra) rather than the ParT-style attention stack.
+# Use as a baseline to isolate the contribution of deep Lorentz equivariance
+# vs the LorentzParT hybrid approach.
+
+model:
+  name: lorentz_gatr
+  num_classes: 10
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  num_cls_layers: 2
+  num_mlp_layers: 0
+  hidden_dim: 256
+  hidden_mv_channels: 8
+  in_s_channels: null
+  out_s_channels: null
+  hidden_s_channels: 16
+  attention: {}
+  mlp: {}
+  reinsert_mv_channels: null
+  reinsert_s_channels: null
+  dropout: 0.1
+  expansion_factor: 4
+  max_num_particles: 128
+  num_particle_features: 4
+  mask: false
+  weights: null     # set to a checkpoint path to load pretrained encoder weights
+  inference: false
+
+train:
+  batch_size: 1000
+  criterion:
+    name: cross_entropy_loss
+  optimizer:
+    name: radam
+    lr: 0.001
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.00001
+  callbacks:
+    - name: early_stopping
+      patience: 7
+      min_delta: 0.000001
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: true
+  save_best: true
+  save_ckpt: true
+  save_fig: true
+  num_workers: 8
+  pin_memory: true

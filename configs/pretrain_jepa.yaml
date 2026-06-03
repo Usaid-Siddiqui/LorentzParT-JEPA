@@ -23,6 +23,7 @@ model:
   jepa:
     ema_momentum_start: 0.996   # slow-start: target changes quickly early on
     ema_momentum_end: 1.0       # approaches frozen at end of training
+    use_attention_gate: true    # set false to ablate gating and run vanilla JEPA
 
 train:
   batch_size: 1000

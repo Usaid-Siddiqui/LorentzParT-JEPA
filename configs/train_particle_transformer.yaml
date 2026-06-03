@@ -1,0 +1,54 @@
+# Configuration for ParticleTransformer supervised classification on JetClass.
+#
+# ParticleTransformer uses ParT-style pairwise interaction attention (U matrix)
+# but without Lorentz-equivariant EquiLinear layers. Use as a baseline to
+# isolate the contribution of Lorentz equivariance vs the interaction attention.
+
+model:
+  name: particle_transformer
+  num_classes: 10
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  num_cls_layers: 2
+  num_mlp_layers: 0
+  hidden_dim: 256
+  dropout: 0.1
+  expansion_factor: 4
+  max_num_particles: 128
+  num_particle_features: 4
+  pair_embed_dims: [64, 64, 64]
+  mask: false
+  weights: null     # set to a checkpoint path to load pretrained encoder weights
+  inference: false
+
+train:
+  batch_size: 1000
+  criterion:
+    name: cross_entropy_loss
+  optimizer:
+    name: radam
+    lr: 0.001
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.00001
+  callbacks:
+    - name: early_stopping
+      patience: 7
+      min_delta: 0.000001
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: true
+  save_best: true
+  save_ckpt: true
+  save_fig: true
+  num_workers: 8
+  pin_memory: true
