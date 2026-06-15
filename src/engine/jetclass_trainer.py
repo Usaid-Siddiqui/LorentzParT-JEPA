@@ -1,4 +1,5 @@
 import os
+import time
 from typing import List, Tuple, Dict, Callable, Optional, Union
 
 import numpy as np
@@ -78,6 +79,7 @@ class JetClassTrainer(Trainer):
             for cb in self.callbacks:
                 cb.on_train_begin(trainer=self)
 
+            t_start = time.monotonic()
             total_steps = self.num_epochs * len(self.train_loader)
             start_step = self.start_epoch * len(self.train_loader)
             if self.progress_bar and self.rank == 0:
@@ -230,6 +232,7 @@ class JetClassTrainer(Trainer):
                     'val_loss': val_loss,
                     'val_metric': val_metric,
                     'learning_rate': current_lr,
+                    'elapsed_total_s': time.monotonic() - t_start,
                 }
                 self.log_csv(logs)
 
