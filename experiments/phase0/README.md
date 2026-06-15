@@ -108,7 +108,7 @@ MAE embeddings have high effective rank but high cosine similarity — many dime
 | File | Purpose |
 |------|---------|
 | `run_phase0.py` | Orchestrates all 5 conditions across multiple seeds; writes `results/seed_{seed}.json` |
-| `analyze_results.py` | Aggregates seed JSONs → summary tables + figures |
+| `../analyze_results.py` | Aggregates seed JSONs → summary tables + figures (shared across phases) |
 | `linear_probe.py` | Standalone linear probe (frozen encoder + linear head) |
 | `patch_results.py` | One-off backfill script for fixing missing fields in existing JSONs |
 | `configs/linear_probe.yaml` | Hyperparameters for linear probe (AdamW, CosineAnnealingLR, 10 epochs) |
@@ -129,7 +129,7 @@ python experiments/phase0/run_phase0.py \
     --skip-pretrain --skip-finetune
 
 # Aggregate and plot
-python experiments/phase0/analyze_results.py \
+python experiments/analyze_results.py \
     --results-dir ./experiments/phase0/results
 ```
 

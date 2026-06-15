@@ -1,12 +1,13 @@
 """
-Aggregate Phase 0 multi-seed results and produce a summary table and figures.
+Aggregate multi-seed experiment results and produce summary tables and figures.
 
-Reads all seed_*.json files written by run_phase0.py and computes mean ± std
+Reads all seed_*.json files from a results directory and computes mean ± std
 across seeds for each condition and metric.
 
-Must be run from the LorentzParT_JEPA/ root directory:
-
-    python experiments/phase0/analyze_results.py --results-dir ./experiments/phase0/results
+Usage:
+    python experiments/analyze_results.py --results-dir ./experiments/phase0/results
+    python experiments/analyze_results.py --results-dir ./experiments/phase1/results \\
+        --conditions gate_random no_gate_biased gate_biased
 """
 
 import os
@@ -63,7 +64,7 @@ CLASS_NAMES = [
 
 def parse_args():
     p = argparse.ArgumentParser(description="Aggregate experiment results")
-    p.add_argument('--results-dir', default='./experiments/phase0/results')
+    p.add_argument('--results-dir', required=True)
     p.add_argument('--output-dir',  default=None, help='Defaults to --results-dir')
     p.add_argument('--conditions',  nargs='+', default=None,
                    help='Conditions to include (default: all found in JSONs)')
@@ -175,16 +176,23 @@ def print_per_class_table(all_results, condition_order):
         print('─' * len(header))
 
 
-def print_embedding_table(all_results):
+def print_embedding_table(all_results, condition_order):
     keys   = ['effective_rank', 'mean_var', 'mean_cos_sim']
     labels = ['Effective Rank', 'Mean Variance', 'Mean Cos Sim']
+    # Only show conditions that have embedding stats
+    conds_with_stats = [
+        c for c in condition_order
+        if collect(all_results, c, 'effective_rank', nested='embedding_stats')
+    ]
+    if not conds_with_stats:
+        return
     print(f"\n{'Embedding collapse diagnostics  (mean ± std)'}")
     header = f"{'Condition':<22}" + "".join(f"  {l:>18}" for l in labels)
     print('─' * len(header))
     print(header)
     print('─' * len(header))
-    for cond in ['jepa_finetune', 'mae_finetune']:
-        row = f"{CONDITION_LABELS[cond]:<22}"
+    for cond in conds_with_stats:
+        row = f"{_label(cond):<22}"
         for key in keys:
             vals = collect(all_results, cond, key, nested='embedding_stats')
             if vals:
@@ -232,11 +240,6 @@ def _bar_plot(all_results, metric, ylabel, title, output_path, condition_order=N
     print(f"Saved → {output_path}")
 
 
-def plot_accuracy_bars(all_results, output_path):
-    _bar_plot(all_results, 'test_auc', 'Macro-OVO ROC AUC',
-              'Phase 0 — ROC AUC by condition', output_path)
-
-
 def _plot_per_class(all_results, metric_key, ylabel, title, output_path, condition_order=None):
     conds = condition_order or ['jepa_finetune', 'mae_finetune', 'scratch']
     arrays = {c: collect_per_class_metric(all_results, c, key=metric_key) for c in conds}
@@ -271,25 +274,29 @@ def _plot_per_class(all_results, metric_key, ylabel, title, output_path, conditi
     print(f"Saved → {output_path}")
 
 
-def plot_per_class_bars(all_results, output_path):
-    _plot_per_class(all_results, 'per_class_auc', 'ROC AUC',
-                    'Per-class ROC AUC by condition', output_path)
-
-
-def plot_embedding_stats(all_results, output_path):
+def plot_embedding_stats(all_results, output_path, condition_order=None):
     keys   = ['effective_rank', 'mean_var', 'mean_cos_sim']
     titles = ['Effective Rank\n(collapse → 1)', 'Mean Variance\n(collapse → 0)',
               'Mean Cosine Sim\n(collapse → 1)']
 
+    # Only plot conditions that have embedding stats
+    conds = [
+        c for c in (condition_order or CONDITION_ORDER)
+        if collect(all_results, c, 'effective_rank', nested='embedding_stats')
+    ]
+    if not conds:
+        return
+
     fig, axes = plt.subplots(1, 3, figsize=(12, 4))
     for ax, key, title in zip(axes, keys, titles):
-        for cond, color in [('jepa_finetune', '#1565C0'), ('mae_finetune', '#E65100')]:
+        for idx, cond in enumerate(conds):
             vals = collect(all_results, cond, key, nested='embedding_stats')
             if vals:
                 ax.bar(
-                    [CONDITION_LABELS[cond].replace(' → finetune', '')],
+                    [_label(cond)],
                     [np.mean(vals)], yerr=[np.std(vals)],
-                    color=color, capsize=5, edgecolor='black', linewidth=0.8, alpha=0.9,
+                    color=_color(cond, idx), capsize=5,
+                    edgecolor='black', linewidth=0.8, alpha=0.9,
                 )
         ax.set_title(title, fontsize=10)
         ax.grid(axis='y', alpha=0.35)
@@ -324,7 +331,7 @@ def main():
 
     print_summary_table(all_results, condition_order)
     print_per_class_table(all_results, condition_order)
-    print_embedding_table(all_results)
+    print_embedding_table(all_results, condition_order)
 
     _bar_plot(all_results, 'test_auc', 'Macro-OVO ROC AUC', 'ROC AUC by condition',
               os.path.join(out_dir, 'auc_bars.png'), condition_order)
@@ -336,7 +343,7 @@ def main():
     _plot_per_class(all_results, 'per_class_acc', 'Accuracy',
                     'Per-class accuracy by condition',
                     os.path.join(out_dir, 'per_class_bars.png'), condition_order)
-    plot_embedding_stats(all_results, os.path.join(out_dir, 'embedding_stats.png'))
+    plot_embedding_stats(all_results, os.path.join(out_dir, 'embedding_stats.png'), condition_order)
 
     print(f"\nAll figures saved to {out_dir}/")
 

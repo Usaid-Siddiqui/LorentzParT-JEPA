@@ -31,7 +31,6 @@ from src.engine import MaskedModelTrainer
 from src.models import LorentzParT
 from src.utils import set_seed, setup_ddp, cleanup_ddp
 from src.utils.data import NpyJetClassDataset
-from src.utils.viz import plot_ssl_history
 
 warnings.filterwarnings('ignore')
 
@@ -104,11 +103,6 @@ def main(rank, world_size, seed, config_path, data_dir, checkpoint_path=None, ru
     cleanup_ddp()
 
     if rank == 0:
-        output_path = (
-            os.path.join(trainer.outputs_dir, f"{trainer.run_name}_mae_history.png")
-            if train_cfg.save_fig else None
-        )
-        plot_ssl_history(history, save_fig=output_path)
         print(f"\nBest model saved to: {trainer.best_model_path}")
 
 

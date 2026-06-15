@@ -226,7 +226,7 @@ def main():
         print(f"Saved → {out_path}")
 
     print(f"\nAll done. Aggregate with:")
-    print(f"  python experiments/phase0/analyze_results.py \\")
+    print(f"  python experiments/analyze_results.py \\")
     print(f"    --results-dir {args.output_dir} \\")
     print(f"    --conditions {' '.join(conditions.keys())}")
 

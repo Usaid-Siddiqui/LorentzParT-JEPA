@@ -19,7 +19,7 @@ Skip flags let you resume mid-experiment:
     --skip-probe
 
 Outputs per seed:  experiments/phase0/results/seed_{seed}.json
-Summary:           run analyze_results.py after all seeds complete.
+Summary:           run experiments/analyze_results.py after all seeds complete.
 """
 
 import os
@@ -376,7 +376,7 @@ def main():
 
     print(f"\n{'=' * 60}")
     print(f"All seeds done. Run analyze_results.py to produce summary.")
-    print(f"  python experiments/phase0/analyze_results.py --results-dir {args.output_dir}")
+    print(f"  python experiments/analyze_results.py --results-dir {args.output_dir}")
 
 
 if __name__ == '__main__':

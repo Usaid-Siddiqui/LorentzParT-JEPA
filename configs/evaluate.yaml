@@ -27,5 +27,3 @@ eval:
   batch_size: 1000
   num_workers: 8
   pin_memory: true
-  save_fig: true
-  outputs_dir: ./outputs

@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 
 @dataclass
@@ -16,11 +16,11 @@ class TrainConfig:
     progress_bar: bool = True
     save_best: bool = True
     save_ckpt: bool = True
-    save_fig: bool = False
     device: str = None
     num_workers: int = 0
     pin_memory: bool = False
 
     @classmethod
     def from_dict(cls, d: dict):
-        return cls(**d)
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in known})

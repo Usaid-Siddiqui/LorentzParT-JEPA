@@ -1,9 +1,9 @@
 """
-Plot training curves for Phase 0 experiments.
+Plot training convergence curves from per-epoch CSV logs.
 
 Produces two figures:
-  1. Pretrain val loss over wall-clock time (JEPA vs MAE), mean ± std shading across seeds
-  2. Finetune val accuracy over epoch (JEPA → ft, MAE → ft, Scratch), mean ± std shading
+  1. Pretrain val loss over wall-clock time, mean ± std shading across seeds
+  2. Finetune val accuracy + val loss over epoch, mean ± std shading
 
 CSV formats (all headerless):
 
@@ -13,24 +13,13 @@ CSV formats (all headerless):
   MAE pretrain (7 cols):
     epoch, train_loss, val_loss, lr, epoch_time_s, elapsed_total_s, best_epoch
 
-  Finetune / scratch (6 cols):
-    epoch, train_loss, train_metric, val_loss, val_metric, lr
+  Finetune / scratch (6+ cols):
+    epoch, train_loss, train_metric, val_loss, val_metric, lr[, elapsed_total_s]
 
 Usage:
-    python experiments/phase0/plot_curves.py \\
-        --pretrain-csvs \\
-            jepa:/path/to/jepa_seed42.csv \\
-            jepa:/path/to/jepa_seed123.csv \\
-            jepa:/path/to/jepa_seed456.csv \\
-            mae:/path/to/mae_seed42.csv \\
-            mae:/path/to/mae_seed123.csv \\
-            mae:/path/to/mae_seed456.csv \\
-        --finetune-csvs \\
-            jepa_finetune:/path/to/jepa_ft_seed42.csv \\
-            jepa_finetune:/path/to/jepa_ft_seed123.csv \\
-            jepa_finetune:/path/to/jepa_ft_seed456.csv \\
-            mae_finetune:/path/to/mae_ft_seed42.csv \\
-            scratch:/path/to/scratch_seed42.csv \\
+    python experiments/plot_curves.py \\
+        --pretrain-csvs jepa:path/to/csv mae:path/to/csv \\
+        --finetune-csvs jepa_finetune:path/to/csv scratch:path/to/csv \\
         --output-dir ./experiments/phase0/results
 """
 

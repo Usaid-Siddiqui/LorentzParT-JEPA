@@ -79,8 +79,6 @@ class Trainer:
         Whether to save the best model based on validation loss. Overrides config if provided.
     save_ckpt: bool, optional
         Whether to save checkpoints during training. Overrides config if provided.
-    save_fig: bool, optional
-        Whether to save evaluation figures. Overrides config if provided.
     num_workers: int, optional
         Number of workers for data loading. Overrides config if provided.
     pin_memory: bool, optional
@@ -109,7 +107,6 @@ class Trainer:
         progress_bar: Optional[bool] = None,
         save_best: Optional[bool] = None,
         save_ckpt: Optional[bool] = None,
-        save_fig: Optional[bool] = None,
         num_workers: Optional[int] = None,
         pin_memory: Optional[bool] = None
     ):
@@ -158,7 +155,6 @@ class Trainer:
             self.progress_bar = progress_bar if progress_bar is not None else config.progress_bar
             self.save_best = save_best if save_best is not None else config.save_best
             self.save_ckpt = save_ckpt if save_ckpt is not None else config.save_ckpt
-            self.save_fig = save_fig if save_fig is not None else config.save_fig
             self.num_workers = num_workers if num_workers is not None else config.num_workers
             self.pin_memory = pin_memory if pin_memory is not None else config.pin_memory
         else:
@@ -180,7 +176,6 @@ class Trainer:
             self.progress_bar = progress_bar if progress_bar is not None else True
             self.save_best = save_best if save_best is not None else True
             self.save_ckpt = save_ckpt if save_ckpt is not None else True
-            self.save_fig = save_fig if save_fig is not None else False
             self.num_workers = num_workers if num_workers is not None else 0
             self.pin_memory = pin_memory if pin_memory is not None else False
         
@@ -278,11 +273,9 @@ class Trainer:
         self.best_models_dir = os.path.join(self.log_dir, 'best')
         self.checkpoints_dir = os.path.join(self.log_dir, 'checkpoints')
         self.loggings_dir = os.path.join(self.log_dir, 'logging')
-        self.outputs_dir = os.path.join(self.log_dir, 'output')
         os.makedirs(self.best_models_dir, exist_ok=True)
         os.makedirs(self.checkpoints_dir, exist_ok=True)
         os.makedirs(self.loggings_dir, exist_ok=True)
-        os.makedirs(self.outputs_dir, exist_ok=True)
 
         # Determine run index
         self.run_name = self._get_next_run_index()
@@ -531,7 +524,6 @@ class Trainer:
     def evaluate(
         self,
         loss_type: str,
-        plot: Optional[Union[Callable, List[Callable]]] = None
     ) -> Tuple[float, float, np.ndarray, np.ndarray]:
         if self.test_loader is None:
             raise ValueError("Test dataset is not provided.")
@@ -611,25 +603,5 @@ class Trainer:
 
         if self.rank == 0:
             print(f"test_loss: {test_loss:.4f} | test_metric: {test_metric:.4f}")
-
-            # Visualization
-            if plot is not None:
-                if isinstance(plot, list):
-                    for viz in plot:
-                        if getattr(viz, '__name__', '') == 'plot_roc_curve':
-                            output_path = os.path.join(self.outputs_dir, f"{self.run_name}_roc_curve.png")
-                        elif getattr(viz, '__name__', '') == 'plot_confusion_matrix':
-                            output_path = os.path.join(self.outputs_dir, f"{self.run_name}_confusion_matrix.png")
-
-                        output_path = output_path if self.save_fig else None
-                        viz(y_true, y_pred, save_fig=output_path)
-                else:
-                    if getattr(plot, '__name__', '') == 'plot_roc_curve':
-                        output_path = os.path.join(self.outputs_dir, f"{self.run_name}_roc_curve.png")
-                    elif getattr(plot, '__name__', '') == 'plot_confusion_matrix':
-                        output_path = os.path.join(self.outputs_dir, f"{self.run_name}_confusion_matrix.png")
-
-                    output_path = output_path if self.save_fig else None
-                    plot(y_true, y_pred, save_fig=output_path)
 
         return test_loss, test_metric, y_true, y_pred

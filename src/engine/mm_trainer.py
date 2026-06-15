@@ -1,6 +1,6 @@
 import os
 import time
-from typing import List, Tuple, Dict, Callable, Optional, Union
+from typing import List, Tuple, Dict, Callable, Optional
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -61,8 +61,6 @@ class MaskedModelTrainer(Trainer):
         Whether to save the best model based on validation loss. Overrides config if provided.
     save_ckpt: bool, optional
         Whether to save checkpoints during training. Overrides config if provided.
-    save_fig: bool, optional
-        Whether to save evaluation figures. Overrides config if provided.
     num_workers: int, optional
         Number of workers for data loading. Overrides config if provided.
     pin_memory: bool, optional
@@ -290,7 +288,6 @@ class MaskedModelTrainer(Trainer):
     @torch.no_grad()
     def evaluate(
         self,
-        plot: Optional[Union[Callable, List[Callable]]] = None
     ) -> Tuple[float, float, np.ndarray, np.ndarray]:
         if self.test_loader is None:
             raise ValueError("Test dataset is not provided.")
@@ -387,17 +384,5 @@ class MaskedModelTrainer(Trainer):
                 f"phi_loss: {avg_test_components[2]:.4f} | "
                 f"energy_loss: {avg_test_components[3]:.4f}"
             )
-
-            # Visualization
-            if plot is not None:
-                if isinstance(plot, list):
-                    for i, viz in enumerate(plot):
-                        output_path = os.path.join(self.outputs_dir, f"{self.run_name}_viz_{i + 1}.png")
-                        output_path = output_path if self.save_fig else None
-                        viz(y_true, y_pred, save_fig=output_path)
-                else:
-                    output_path = os.path.join(self.outputs_dir, f"{self.run_name}_particle_reconstruction.png")
-                    output_path = output_path if self.save_fig else None
-                    plot(y_true, y_pred, save_fig=output_path)
 
         return test_loss, test_metric, y_true, y_pred
