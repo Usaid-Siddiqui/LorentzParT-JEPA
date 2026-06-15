@@ -24,19 +24,37 @@ import matplotlib.pyplot as plt
 
 CONDITION_ORDER  = ['jepa_finetune', 'mae_finetune', 'scratch', 'jepa_probe', 'mae_probe']
 CONDITION_LABELS = {
-    'jepa_finetune': 'JEPA → finetune',
-    'mae_finetune':  'MAE → finetune',
-    'scratch':       'Scratch',
-    'jepa_probe':    'JEPA → probe',
-    'mae_probe':     'MAE → probe',
+    'jepa_finetune':    'JEPA → finetune',
+    'mae_finetune':     'MAE → finetune',
+    'scratch':          'Scratch',
+    'jepa_probe':       'JEPA → probe',
+    'mae_probe':        'MAE → probe',
+    'gate_random':      'Gate + Random',
+    'no_gate_biased':   'No Gate + Biased',
+    'gate_biased':      'Gate + Biased',
 }
 CONDITION_COLORS = {
-    'jepa_finetune': '#1565C0',
-    'mae_finetune':  '#E65100',
-    'scratch':       '#757575',
-    'jepa_probe':    '#90CAF9',
-    'mae_probe':     '#FFCC80',
+    'jepa_finetune':    '#1565C0',
+    'mae_finetune':     '#E65100',
+    'scratch':          '#757575',
+    'jepa_probe':       '#90CAF9',
+    'mae_probe':        '#FFCC80',
+    'gate_random':      '#1B5E20',
+    'no_gate_biased':   '#4A148C',
+    'gate_biased':      '#B71C1C',
 }
+_FALLBACK_COLORS = [
+    '#2196F3', '#FF9800', '#4CAF50', '#9C27B0',
+    '#F44336', '#00BCD4', '#8BC34A', '#FF5722',
+]
+
+
+def _label(cond):
+    return CONDITION_LABELS.get(cond, cond.replace('_', ' ').title())
+
+
+def _color(cond, idx=0):
+    return CONDITION_COLORS.get(cond, _FALLBACK_COLORS[idx % len(_FALLBACK_COLORS)])
 CLASS_NAMES = [
     'QCD/Zνν', 'H→bb', 'H→cc', 'H→gg', 'H→4q',
     'H→lνqq', 'Z→qq', 'W→qq', 't→bqq', 't→blν',
@@ -44,9 +62,11 @@ CLASS_NAMES = [
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Aggregate Phase 0 results")
+    p = argparse.ArgumentParser(description="Aggregate experiment results")
     p.add_argument('--results-dir', default='./experiments/phase0/results')
     p.add_argument('--output-dir',  default=None, help='Defaults to --results-dir')
+    p.add_argument('--conditions',  nargs='+', default=None,
+                   help='Conditions to include (default: all found in JSONs)')
     return p.parse_args()
 
 
@@ -86,7 +106,7 @@ def collect_per_class(all_results, condition):
 
 # ── Tables ────────────────────────────────────────────────────────────────────
 
-def print_summary_table(all_results):
+def print_summary_table(all_results, condition_order):
     n = len(all_results)
     cols = ['test_auc', 'test_acc', 'best_val_acc', 'pretrain_time_s']
     col_w = 22
@@ -96,14 +116,14 @@ def print_summary_table(all_results):
         header += f"  {c:>{col_w}}"
     sep = '─' * len(header)
 
-    print(f"\n{'Phase 0 Summary':^{len(header)}}")
+    print(f"\n{'Results Summary':^{len(header)}}")
     print(f"{'(n=' + str(n) + ' seeds)':^{len(header)}}")
     print(sep)
     print(header)
     print(sep)
 
-    for cond in CONDITION_ORDER:
-        label = CONDITION_LABELS.get(cond, cond)
+    for cond in condition_order:
+        label = _label(cond)
         row = f"{label:<22}"
         for metric in cols:
             nested = 'embedding_stats' if metric.startswith('embed') else None
@@ -127,14 +147,14 @@ def collect_per_class_metric(all_results, condition, key='per_class_acc'):
     return np.array(rows) if rows else None
 
 
-def print_per_class_table(all_results):
-    conds = ['jepa_finetune', 'mae_finetune', 'scratch']
+def print_per_class_table(all_results, condition_order):
+    conds = condition_order
 
     for metric_key, metric_label in [('per_class_auc', 'AUC'), ('per_class_acc', 'Accuracy')]:
         print(f"\n{'Per-class ' + metric_label + '  (mean ± std across seeds)'}")
         header = f"{'Class':<14}"
         for c in conds:
-            header += f"  {CONDITION_LABELS[c]:>20}"
+            header += f"  {_label(c):>20}"
         print('─' * len(header))
         print(header)
         print('─' * len(header))
@@ -177,16 +197,17 @@ def print_embedding_table(all_results):
 
 # ── Figures ───────────────────────────────────────────────────────────────────
 
-def _bar_plot(all_results, metric, ylabel, title, output_path):
+def _bar_plot(all_results, metric, ylabel, title, output_path, condition_order=None):
+    order = condition_order or CONDITION_ORDER
     means, stds, labels, colors = [], [], [], []
-    for cond in CONDITION_ORDER:
+    for idx, cond in enumerate(order):
         vals = collect(all_results, cond, metric)
         if not vals:
             continue
         means.append(np.mean(vals))
         stds.append(np.std(vals))
-        labels.append(CONDITION_LABELS[cond])
-        colors.append(CONDITION_COLORS[cond])
+        labels.append(_label(cond))
+        colors.append(_color(cond, idx))
 
     fig, ax = plt.subplots(figsize=(9, 5))
     x = np.arange(len(means))
@@ -216,12 +237,13 @@ def plot_accuracy_bars(all_results, output_path):
               'Phase 0 — ROC AUC by condition', output_path)
 
 
-def _plot_per_class(all_results, metric_key, ylabel, title, output_path):
-    conds = ['jepa_finetune', 'mae_finetune', 'scratch']
+def _plot_per_class(all_results, metric_key, ylabel, title, output_path, condition_order=None):
+    conds = condition_order or ['jepa_finetune', 'mae_finetune', 'scratch']
     arrays = {c: collect_per_class_metric(all_results, c, key=metric_key) for c in conds}
 
+    n_conds = len(conds)
     x = np.arange(10)
-    width = 0.28
+    width = min(0.28, 0.8 / n_conds)
     fig, ax = plt.subplots(figsize=(14, 5))
 
     for k, cond in enumerate(conds):
@@ -230,10 +252,11 @@ def _plot_per_class(all_results, metric_key, ylabel, title, output_path):
             continue
         means = arr.mean(axis=0)
         stds  = arr.std(axis=0)
-        ax.bar(x + (k - 1) * width, means, width,
+        offset = (k - n_conds / 2 + 0.5) * width
+        ax.bar(x + offset, means, width,
                yerr=stds, capsize=3,
-               label=CONDITION_LABELS[cond],
-               color=CONDITION_COLORS[cond],
+               label=_label(cond),
+               color=_color(cond, k),
                edgecolor='black', linewidth=0.5, alpha=0.9)
 
     ax.set_xticks(x)
@@ -287,18 +310,32 @@ def main():
     all_results = load_results(args.results_dir)
     print(f"Loaded {len(all_results)} seed(s) from {args.results_dir}")
 
-    print_summary_table(all_results)
-    print_per_class_table(all_results)
+    # Determine condition order: CLI override > auto-detect from JSONs > default
+    if args.conditions:
+        condition_order = args.conditions
+    else:
+        found = set()
+        for r in all_results:
+            found.update(r.get('conditions', {}).keys())
+        condition_order = [c for c in CONDITION_ORDER if c in found]
+        condition_order += [c for c in sorted(found) if c not in CONDITION_ORDER]
+
+    print(f"Conditions: {condition_order}")
+
+    print_summary_table(all_results, condition_order)
+    print_per_class_table(all_results, condition_order)
     print_embedding_table(all_results)
 
-    plot_accuracy_bars(all_results,  os.path.join(out_dir, 'auc_bars.png'))
-    _bar_plot(all_results, 'test_acc', 'Test Accuracy',
-              'Phase 0 — Test accuracy by condition',
-              os.path.join(out_dir, 'accuracy_bars.png'))
-    plot_per_class_bars(all_results, os.path.join(out_dir, 'per_class_auc_bars.png'))
+    _bar_plot(all_results, 'test_auc', 'Macro-OVO ROC AUC', 'ROC AUC by condition',
+              os.path.join(out_dir, 'auc_bars.png'), condition_order)
+    _bar_plot(all_results, 'test_acc', 'Test Accuracy', 'Test accuracy by condition',
+              os.path.join(out_dir, 'accuracy_bars.png'), condition_order)
+    _plot_per_class(all_results, 'per_class_auc', 'ROC AUC',
+                    'Per-class ROC AUC by condition',
+                    os.path.join(out_dir, 'per_class_auc_bars.png'), condition_order)
     _plot_per_class(all_results, 'per_class_acc', 'Accuracy',
                     'Per-class accuracy by condition',
-                    os.path.join(out_dir, 'per_class_bars.png'))
+                    os.path.join(out_dir, 'per_class_bars.png'), condition_order)
     plot_embedding_stats(all_results, os.path.join(out_dir, 'embedding_stats.png'))
 
     print(f"\nAll figures saved to {out_dir}/")
