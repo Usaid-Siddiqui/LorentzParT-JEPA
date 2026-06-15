@@ -171,16 +171,33 @@ def main():
         print(f"\n{'#' * 60}\n# SEED {seed}\n{'#' * 60}")
         t0 = time.monotonic()
 
-        seed_results = {'seed': seed, 'conditions': {}}
+        # Load existing results for this seed (if any) so we can skip done conditions
+        out_path = os.path.join(args.output_dir, f'seed_{seed}.json')
+        if os.path.exists(out_path):
+            with open(out_path) as f:
+                seed_results = json.load(f)
+            done = set(seed_results.get('conditions', {}).keys())
+            print(f"Loaded existing results: {sorted(done)}")
+        else:
+            seed_results = {'seed': seed, 'conditions': {}}
+            done = set()
 
         for cond_name, pretrain_config in conditions.items():
+            # Skip if this condition already has eval results
+            if cond_name in done:
+                print(f"\n--- Condition: {cond_name} — already done, skipping ---")
+                continue
+
             print(f"\n--- Condition: {cond_name} ---")
 
             pretrain_ckpt = f'./logs/ParticleJEPA/best/{cond_name}_seed{seed}.pt'
             finetune_ckpt = f'./logs/LorentzParT/best/{cond_name}_ft_seed{seed}.pt'
 
-            # 1. Pretrain
-            if not args.skip_pretrain:
+            # 1. Pretrain — skip if checkpoint exists or --skip-pretrain
+            if args.skip_pretrain or os.path.exists(pretrain_ckpt):
+                if os.path.exists(pretrain_ckpt):
+                    print(f"[SKIP pretrain] checkpoint exists: {pretrain_ckpt}")
+            else:
                 run_stage(
                     [python, 'scripts/pretrain_jepa.py',
                      '--data-dir', args.data_dir,
@@ -190,8 +207,11 @@ def main():
                     env=env, desc=f'Pretrain {cond_name} seed={seed}',
                 )
 
-            # 2. Finetune
-            if not args.skip_finetune:
+            # 2. Finetune — skip if checkpoint exists or --skip-finetune
+            if args.skip_finetune or os.path.exists(finetune_ckpt):
+                if os.path.exists(finetune_ckpt):
+                    print(f"[SKIP finetune] checkpoint exists: {finetune_ckpt}")
+            else:
                 run_stage(
                     [python, 'scripts/train_lorentz_part.py',
                      '--data-dir', args.data_dir,
@@ -217,13 +237,13 @@ def main():
 
             print(f"  test_acc={metrics['test_acc']:.4f}  test_auc={metrics['test_auc']:.4f}  curve_epochs={len(metrics['training_curve'])}")
 
+            # Save after each condition so progress isn't lost
+            with open(out_path, 'w') as f:
+                json.dump(seed_results, f, indent=2)
+            print(f"Saved → {out_path}")
+
         elapsed = time.monotonic() - t0
         print(f"\nSeed {seed} done in {elapsed / 60:.1f} min")
-
-        out_path = os.path.join(args.output_dir, f'seed_{seed}.json')
-        with open(out_path, 'w') as f:
-            json.dump(seed_results, f, indent=2)
-        print(f"Saved → {out_path}")
 
     print(f"\nAll done. Aggregate with:")
     print(f"  python experiments/analyze_results.py \\")
