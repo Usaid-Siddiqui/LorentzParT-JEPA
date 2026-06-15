@@ -2,8 +2,6 @@
 data/
 logs/*
 !logs/.gitkeep
-outputs/*.txt
-outputs/*.csv
 
 # Python
 __pycache__/

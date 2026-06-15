@@ -148,13 +148,16 @@ def main():
     )
     trainer._set_logging_paths(args.run_name)
 
-    os.makedirs(args.outputs_dir, exist_ok=True)
-    trainer.outputs_dir = args.outputs_dir
-
     test_loss, test_acc, y_true, y_pred = trainer.evaluate(
         loss_type='cross_entropy',
-        plot=[plot_roc_curve, plot_confusion_matrix]
     )
+
+    # Save ROC curve and confusion matrix
+    os.makedirs(args.outputs_dir, exist_ok=True)
+    plot_roc_curve(y_true, y_pred,
+                   save_fig=os.path.join(args.outputs_dir, f"{args.run_name}_roc_curve.png"))
+    plot_confusion_matrix(y_true, y_pred,
+                          save_fig=os.path.join(args.outputs_dir, f"{args.run_name}_confusion_matrix.png"))
 
     # Primary metric: macro-averaged OVO ROC AUC
     roc_auc = roc_auc_score(y_true, y_pred, average='macro', multi_class='ovo')

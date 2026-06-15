@@ -53,6 +53,5 @@ train:
   progress_bar: true
   save_best: true
   save_ckpt: true
-  save_fig: true
   num_workers: 8
   pin_memory: true
