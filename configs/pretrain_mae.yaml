@@ -1,8 +1,11 @@
 # Configuration for MAE (Masked Autoencoder) pretraining — the baseline approach.
 #
 # Uses the existing LorentzParT with mask=True: the model reconstructs the raw
-# 4-vector (pT, η, φ, E) of one randomly masked particle per jet.
+# 4-vector (pT, η, φ, E) of one masked particle per jet.
 # ConservationLoss handles the periodicity of φ via cosine similarity.
+#
+# mask_mode: biased matches Nguyen's original LorentzParT MAE design (high-pT
+# weighted). Set to 'random' to reproduce the original (handicapped) Phase 0 MAE.
 
 model:
   name: lorentz_part
@@ -23,6 +26,7 @@ model:
   expansion_factor: 4
   pair_embed_dims: [64, 64, 64]
   mask: true
+  mask_mode: biased
   weights: null
 
 train:
