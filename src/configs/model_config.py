@@ -58,6 +58,7 @@ class LorentzParTConfig(BaseModelConfig):
     reinsert_mv_channels: Optional[Tuple[int]] = None
     reinsert_s_channels: Optional[Tuple[int]] = None
     pair_embed_dims: List[int] = field(default_factory=lambda: [64, 64, 64])
+    mask_mode: str = 'random'
 
     @classmethod
     def from_dict(cls, d: Dict):

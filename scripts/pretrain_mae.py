@@ -71,14 +71,14 @@ def main(rank, world_size, seed, config_path, data_dir, checkpoint_path=None, ru
         labels_path=os.path.join(data_dir, 'train', 'labels.npy'),
         normalize=NORMALIZE,
         norm_dict=NORM_DICT,
-        mask_mode='random',
+        mask_mode=model_cfg.mask_mode,
     )
     val_dataset = NpyJetClassDataset(
         particles_path=os.path.join(data_dir, 'val', 'particles.npy'),
         labels_path=os.path.join(data_dir, 'val', 'labels.npy'),
         normalize=NORMALIZE,
         norm_dict=NORM_DICT,
-        mask_mode='random',
+        mask_mode=model_cfg.mask_mode,
     )
 
     model = LorentzParT(config=model_cfg).to(device)
