@@ -55,7 +55,7 @@ class AttentionGate(nn.Module):
             nn.Sigmoid()                     # gate ∈ [0, 1]
         )
 
-    def forward(self, U: Tensor) -> Tensor:
+    def forward(self, U: Tensor, valid_mask: Tensor) -> Tensor:
         """
         Parameters
         ----------
@@ -63,6 +63,11 @@ class AttentionGate(nn.Module):
             Pairwise interaction matrix from ParticleProcessor.
             Features along dim 3: (ln_delta, ln_kT, ln_z, ln_m2).
             Padding pairs are filled with -1e9; diagonal is 0.
+        valid_mask : Tensor, shape (B, N)
+            True/1 for real particles, False/0 for padding (and masked) particles.
+            REQUIRED: the -1e9 padding fill dominates a naive mean and saturates the
+            sigmoid to exactly 1.0 with zero gradient — the gate becomes a frozen
+            no-op. We therefore mean-pool over valid neighbours only.
 
         Returns
         -------
@@ -70,10 +75,11 @@ class AttentionGate(nn.Module):
             Per-particle scalar importance weights in [0, 1].
             Applied multiplicatively to particle embeddings before the encoder.
         """
-        # ── Aggregate pairwise features per particle ──────────────────────────
-        # Mean over neighbor dimension j → each particle i gets a 4-dim summary
-        # of its average geometric relationship with the rest of the jet
-        avg = U.mean(dim=2)         # (B, N, N, 4) → (B, N, 4)
+        # ── Aggregate pairwise features per particle, over VALID neighbours only ──
+        # Validity of each neighbour j, broadcast over query i and feature dims.
+        valid = valid_mask[:, None, :, None].to(U.dtype)   # (B, 1, N, 1)
+        denom = valid.sum(dim=2).clamp(min=1.0)            # (B, 1, 1) — #valid neighbours
+        avg = (U * valid).sum(dim=2) / denom               # (B, N, 4) — masked mean over j
 
         # ── Map to scalar gate ────────────────────────────────────────────────
         return self.mlp(avg)        # (B, N, 4) → (B, N, 1)

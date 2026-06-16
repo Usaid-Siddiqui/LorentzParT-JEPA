@@ -203,8 +203,12 @@ class ParticleJEPA(nn.Module):
 
         # ---------- Attention gate (optional) ----------
         if self.use_attention_gate:
-            gate = self.attention_gate(U_context)   # (B, N, 1)
-            context_mv = context_mv * gate          # (B, N, 16)
+            # Valid context particles: energy > 0. Excludes padding AND the masked
+            # targets (both appear as -1e9 pairs in U_context), so the gate pools
+            # only over real neighbours instead of saturating on the padding fill.
+            gate_valid = masked_x[..., 3] > 0        # (B, N)
+            gate = self.attention_gate(U_context, gate_valid)   # (B, N, 1)
+            context_mv = context_mv * gate                       # (B, N, 16)
 
         # ---------- Target encoder (no gradient) ----------
         with torch.no_grad():
