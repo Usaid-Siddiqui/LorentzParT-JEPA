@@ -71,11 +71,18 @@ def parse_args():
 
 
 def parse_conditions(specs):
-    """Parse 'name:config_path' strings into an ordered dict."""
+    """Parse 'name:config_path[:num_mask]' strings into an ordered dict.
+
+    Returns name -> (config_path, num_mask) where num_mask is None unless the
+    optional third field is given (used for K-sweeps). Neither names nor config
+    paths contain ':', so a plain split is unambiguous.
+    """
     conditions = {}
     for spec in specs:
-        name, config_path = spec.split(':', 1)
-        conditions[name] = config_path
+        parts = spec.split(':')
+        name, config_path = parts[0], parts[1]
+        num_mask = int(parts[2]) if len(parts) > 2 else None
+        conditions[name] = (config_path, num_mask)
     return conditions
 
 
@@ -182,7 +189,7 @@ def main():
             seed_results = {'seed': seed, 'conditions': {}}
             done = set()
 
-        for cond_name, pretrain_config in conditions.items():
+        for cond_name, (pretrain_config, num_mask) in conditions.items():
             # Skip if this condition already has eval results
             if cond_name in done:
                 print(f"\n--- Condition: {cond_name} — already done, skipping ---")
@@ -198,14 +205,16 @@ def main():
                 if os.path.exists(pretrain_ckpt):
                     print(f"[SKIP pretrain] checkpoint exists: {pretrain_ckpt}")
             else:
-                run_stage(
-                    [python, 'scripts/pretrain_jepa.py',
-                     '--data-dir', args.data_dir,
-                     '--config-path', pretrain_config,
-                     '--run-name', f'{cond_name}_seed{seed}',
-                     '--seed', seed],
-                    env=env, desc=f'Pretrain {cond_name} seed={seed}',
-                )
+                pretrain_cmd = [
+                    python, 'scripts/pretrain_jepa.py',
+                    '--data-dir', args.data_dir,
+                    '--config-path', pretrain_config,
+                    '--run-name', f'{cond_name}_seed{seed}',
+                    '--seed', seed,
+                ]
+                if num_mask is not None:
+                    pretrain_cmd += ['--num-mask', num_mask]
+                run_stage(pretrain_cmd, env=env, desc=f'Pretrain {cond_name} seed={seed}')
 
             # 2. Finetune — skip if checkpoint exists or --skip-finetune
             if args.skip_finetune or os.path.exists(finetune_ckpt):
