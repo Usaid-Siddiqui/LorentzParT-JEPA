@@ -54,10 +54,12 @@ def parse_args():
                         help="Resume from a checkpoint file")
     parser.add_argument('--run-name', type=str, default=None,
                         help="Fixed run name for deterministic save paths (e.g. jepa_pretrain)")
+    parser.add_argument('--num-mask', type=int, default=None,
+                        help="Override jepa.num_mask from the config (for K-sweeps)")
     return parser.parse_args()
 
 
-def main(rank, world_size, seed, config_path, data_dir, checkpoint_path=None, run_name=None):
+def main(rank, world_size, seed, config_path, data_dir, checkpoint_path=None, run_name=None, num_mask=None):
     set_seed(seed)
     setup_ddp(rank, world_size)
     device = torch.device(f'cuda:{rank}' if torch.cuda.is_available() else 'cpu')
@@ -67,6 +69,9 @@ def main(rank, world_size, seed, config_path, data_dir, checkpoint_path=None, ru
 
     model_cfg = JEPAConfig.from_dict(config['model'])
     train_cfg = TrainConfig.from_dict(config['train'])
+
+    if num_mask is not None:
+        model_cfg.num_mask = num_mask
 
     # Datasets
     train_dataset = NpyJetClassDataset(
@@ -136,7 +141,8 @@ if __name__ == '__main__':
     if world_size > 1:
         mp.spawn(
             main,
-            args=(world_size, args.seed, args.config_path, args.data_dir, args.checkpoint_path, args.run_name),
+            args=(world_size, args.seed, args.config_path, args.data_dir,
+                  args.checkpoint_path, args.run_name, args.num_mask),
             nprocs=world_size,
         )
     else:
@@ -148,4 +154,5 @@ if __name__ == '__main__':
             data_dir=args.data_dir,
             checkpoint_path=args.checkpoint_path,
             run_name=args.run_name,
+            num_mask=args.num_mask,
         )

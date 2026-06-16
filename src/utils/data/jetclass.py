@@ -93,7 +93,8 @@ class NpyJetClassDataset(Dataset):
         if mode == 'first':
             mask_idx = valid_idx[:num_mask]
         elif mode == 'biased' and num_mask == 1:
-            # Rejection sampling biased toward low indices (high-pT particles)
+            # Rejection sampling biased toward low indices (high-pT particles).
+            # Kept as-is so existing K=1 biased runs stay bit-reproducible.
             total = np.sum(1 / (np.arange(particles.shape[0]) + 1))
             idx = 127
             u, w = 0, 1
@@ -103,8 +104,19 @@ class NpyJetClassDataset(Dataset):
                 w = (1 / (idx + 1)) / total
             mask_idx = np.array([idx])
         else:
-            # random (default) and biased K>1: sample without replacement
-            mask_idx = np.random.choice(valid_idx, size=num_mask, replace=False)
+            # random (uniform) or biased K>1 (high-pT weighted, w ∝ 1/(index+1)).
+            # Deficit handling: jets with fewer than num_mask valid particles pad
+            # the remainder by repeating, keeping a fixed (K,) shape for batching.
+            p = None
+            if mode == 'biased':
+                w = 1.0 / (valid_idx + 1.0)
+                p = w / w.sum()
+            n = len(valid_idx)
+            if n >= num_mask:
+                mask_idx = np.random.choice(valid_idx, size=num_mask, replace=False, p=p)
+            else:
+                extra = np.random.choice(valid_idx, size=num_mask - n, replace=True, p=p)
+                mask_idx = np.concatenate([valid_idx, extra])
 
         masked_particles = particles.copy()
         masked_targets = masked_particles[mask_idx, :].copy()
