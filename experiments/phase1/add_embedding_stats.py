@@ -22,8 +22,10 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))           # repo root
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'experiments', 'phase0'))
+_HERE = os.path.dirname(os.path.abspath(__file__))          # experiments/phase1
+_REPO = os.path.dirname(os.path.dirname(_HERE))             # repo root
+sys.path.insert(0, _REPO)                                   # for src.*
+sys.path.insert(0, os.path.join(_REPO, 'experiments', 'phase0'))   # for run_phase0
 
 import torch
 
