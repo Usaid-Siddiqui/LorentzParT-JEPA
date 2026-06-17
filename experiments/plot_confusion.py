@@ -39,6 +39,7 @@ from sklearn.metrics import confusion_matrix
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.configs import LorentzParTConfig
@@ -52,7 +53,11 @@ NORM_DICT = {
     'energy': (133.8745574951172,    167.528564453125),
 }
 NORMALIZE = [True, False, False, True]
-CLASS_NAMES = ['QCD', 'Hbb', 'Hcc', 'Hgg', 'H4q', 'Hlνqq', 'Zqq', 'Wqq', 'tbqq', 'tblν']
+# LaTeX class labels (matches src/utils/viz/viz.py & Nguyen's formatting)
+CLASS_LABELS = [
+    "$q/g$", "$H\\to b\\bar{b}$", "$H\\to c\\bar{c}$", "$H\\to gg$", "$H\\to 4q$",
+    "$H\\to \\ell\\nu qq'$", "$Z\\to q\\bar{q}$", "$W\\to qq'$", "$t\\to bqq'$", "$t\\to b\\ell\\nu$",
+]
 
 
 def parse_args():
@@ -140,17 +145,13 @@ def main():
             ax.axis('off')
             print(f"  [skip] no files match {pattern}")
             continue
-        ax.imshow(cm, cmap='Blues', vmin=0, vmax=1)
+        sns.heatmap(cm, ax=ax, annot=True, fmt='.2f', annot_kws={'size': 5},
+                    cmap='coolwarm', vmin=0, vmax=1, cbar=False, square=True,
+                    xticklabels=CLASS_LABELS, yticklabels=CLASS_LABELS)
         ax.set_title(f'{label}   (mean recall {np.diag(cm).mean():.3f}, n={k})', fontsize=11)
-        ax.set_xticks(range(10)); ax.set_xticklabels(CLASS_NAMES, rotation=45, ha='right', fontsize=8)
-        ax.set_yticks(range(10)); ax.set_yticklabels(CLASS_NAMES, fontsize=8)
-        ax.set_xlabel('Predicted', fontsize=9); ax.set_ylabel('True', fontsize=9)
-        for i in range(10):
-            for j in range(10):
-                v = cm[i, j]
-                if v >= 0.01:
-                    ax.text(j, i, f'{v:.2f}', ha='center', va='center', fontsize=6,
-                            color='white' if v > 0.5 else 'black')
+        ax.set_xlabel('Predicted', fontsize=9); ax.set_ylabel('Actual', fontsize=9)
+        ax.tick_params(axis='x', labelrotation=45, labelsize=7)
+        ax.tick_params(axis='y', labelrotation=0, labelsize=7)
         print(f"  {label}: mean recall {np.diag(cm).mean():.3f} (n={k})")
 
     # hide any unused grid cells
