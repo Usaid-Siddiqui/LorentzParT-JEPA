@@ -287,17 +287,15 @@ def plot_embedding_stats(all_results, output_path, condition_order=None):
     if not conds:
         return
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+    fig, axes = plt.subplots(1, 3, figsize=(max(12, 2.4 * len(conds)), 4.8))
+    x = np.arange(len(conds))
     for ax, key, title in zip(axes, keys, titles):
-        for idx, cond in enumerate(conds):
-            vals = collect(all_results, cond, key, nested='embedding_stats')
-            if vals:
-                ax.bar(
-                    [_label(cond)],
-                    [np.mean(vals)], yerr=[np.std(vals)],
-                    color=_color(cond, idx), capsize=5,
-                    edgecolor='black', linewidth=0.8, alpha=0.9,
-                )
+        means = [np.mean(collect(all_results, c, key, nested='embedding_stats') or [np.nan]) for c in conds]
+        stds  = [np.std(collect(all_results, c, key, nested='embedding_stats') or [0.0]) for c in conds]
+        ax.bar(x, means, yerr=stds, color=[_color(c, i) for i, c in enumerate(conds)],
+               capsize=5, edgecolor='black', linewidth=0.8, alpha=0.9)
+        ax.set_xticks(x)
+        ax.set_xticklabels([_label(c) for c in conds], rotation=30, ha='right', fontsize=8)
         ax.set_title(title, fontsize=10)
         ax.grid(axis='y', alpha=0.35)
 

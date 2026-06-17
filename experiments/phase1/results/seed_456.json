@@ -209,7 +209,12 @@
           "val_loss": 1.8657671689987183,
           "elapsed_s": 918.1902259779163
         }
-      ]
+      ],
+      "embedding_stats": {
+        "mean_var": 41.284423828125,
+        "effective_rank": 12.812710762023926,
+        "mean_cos_sim": 0.0954521894454956
+      }
     },
     "no_gate_random": {
       "best_val_acc": 0.3201,
@@ -454,7 +459,12 @@
           "val_loss": 1.7756036400794983,
           "elapsed_s": 921.3000591848977
         }
-      ]
+      ],
+      "embedding_stats": {
+        "mean_var": 47.28855514526367,
+        "effective_rank": 9.768406867980957,
+        "mean_cos_sim": 0.09764212369918823
+      }
     },
     "gate_biased": {
       "test_acc": 0.3473,
@@ -664,7 +674,12 @@
           "val_loss": 2.540402364730835,
           "elapsed_s": 970.1019460610114
         }
-      ]
+      ],
+      "embedding_stats": {
+        "mean_var": 44.31065368652344,
+        "effective_rank": 11.102547645568848,
+        "mean_cos_sim": 0.09258690476417542
+      }
     }
   }
 }
