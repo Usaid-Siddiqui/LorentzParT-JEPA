@@ -133,10 +133,12 @@ class NpyJetClassDataset(Dataset):
             )
             self._apply_norm(masked_particles)
             self._apply_norm(masked_targets)
-            # masked_targets: (K, 4) for K>1, squeeze to (4,) for K=1 (MAE compat)
+            # masked_targets: (K, 4). Squeeze to (4,) only for K=1 (MAE compat);
+            # keep (K, 4) for K>1 so the batch collates to (B, K, 4).
+            targets = masked_targets.squeeze(0) if masked_targets.shape[0] == 1 else masked_targets
             return (
                 torch.from_numpy(masked_particles).float(),
-                torch.from_numpy(masked_targets.squeeze(0)).float(),
+                torch.from_numpy(targets).float(),
                 torch.tensor(mask_idx, dtype=torch.int64),  # (K,)
             )
 
