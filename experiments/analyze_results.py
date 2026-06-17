@@ -27,9 +27,11 @@ CONDITION_ORDER  = ['jepa_finetune', 'mae_finetune', 'scratch', 'jepa_probe', 'm
 CONDITION_LABELS = {
     'jepa_finetune':    'JEPA → finetune',
     'mae_finetune':     'MAE → finetune',
+    'mae_biased_finetune': 'MAE-biased → finetune',
     'scratch':          'Scratch',
     'jepa_probe':       'JEPA → probe',
     'mae_probe':        'MAE → probe',
+    'mae_biased_probe': 'MAE-biased → probe',
     'gate_random':      'Gate + Random',
     'no_gate_biased':   'No Gate + Biased',
     'gate_biased':      'Gate + Biased',
@@ -37,9 +39,11 @@ CONDITION_LABELS = {
 CONDITION_COLORS = {
     'jepa_finetune':    '#1565C0',
     'mae_finetune':     '#E65100',
+    'mae_biased_finetune': '#E65100',
     'scratch':          '#757575',
     'jepa_probe':       '#90CAF9',
     'mae_probe':        '#FFCC80',
+    'mae_biased_probe': '#FFCC80',
     'gate_random':      '#1B5E20',
     'no_gate_biased':   '#4A148C',
     'gate_biased':      '#B71C1C',
