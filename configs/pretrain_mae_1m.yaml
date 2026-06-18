@@ -1,0 +1,62 @@
+# MAE pretraining (biased masking) for the 1M-scale headline run.
+# Identical to pretrain_mae.yaml except, for a fair 30-epoch convergence budget
+# that MATCHES the JEPA pretrain:
+#   - num_epochs 20 -> 30
+#   - scheduler exponential_lr(gamma=0.736) -> cosine_annealing_lr(T_max=30).
+#     Rationale: exponential decay drives the LR to ~0.002x by epoch 20, so MAE
+#     can't actually use a longer budget under it; cosine over 30 epochs gives MAE
+#     a genuine convergence schedule AND holds the LR schedule identical across
+#     JEPA vs MAE (one fewer confound in the objective comparison). Early stopping
+#     (patience 7) cuts it if it plateaus first.
+
+model:
+  name: lorentz_part
+  max_num_particles: 128
+  num_particle_features: 4
+  num_classes: 10
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  num_cls_layers: 2
+  num_mlp_layers: 0
+  hidden_dim: 256
+  hidden_mv_channels: 8
+  in_s_channels: null
+  out_s_channels: null
+  hidden_s_channels: 16
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  mask: true
+  mask_mode: biased
+  weights: null
+
+train:
+  batch_size: 1000
+  criterion:
+    name: conservation_loss
+  optimizer:
+    name: radam
+    lr: 0.001
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.00001
+  callbacks:
+    - name: early_stopping
+      patience: 7
+      min_delta: 0.0001
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true
