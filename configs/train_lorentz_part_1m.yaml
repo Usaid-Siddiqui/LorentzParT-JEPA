@@ -1,0 +1,65 @@
+# Fine-tuning config for the 1M-scale headline run (convergence-fair version).
+#
+# Identical to train_lorentz_part.yaml EXCEPT the training budget is extended so
+# every condition trains to its own plateau rather than a shared 30-epoch cap:
+#   - num_epochs 30 -> 60          generous headroom, esp. for scratch (random init,
+#                                  no pretrained head start -> needs more epochs)
+#   - T_max      30 -> 60          cosine LR must span the full budget, else epochs
+#                                  31+ run at eta_min (frozen) and don't help
+#   - patience    7 -> 10          robust to the noisy val curve; lets slow-converging
+#                                  scratch push through transient val dips
+# Early stopping does the real work: fast-converging JEPA/MAE stop at their plateau
+# (no wasted compute), scratch uses the headroom. save_best -> report best-val ckpt.
+#
+# Shared by all three conditions (JEPA-ft / MAE-ft / scratch) via --finetune-config.
+
+model:
+  name: lorentz_part
+  max_num_particles: 128
+  num_particle_features: 4
+  num_classes: 10
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  num_cls_layers: 2
+  num_mlp_layers: 0
+  hidden_dim: 256
+  hidden_mv_channels: 8
+  in_s_channels: null
+  out_s_channels: null
+  hidden_s_channels: 16
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  mask: false
+  weights: null   # override on command line: --weights path/to/encoder.pt
+
+train:
+  batch_size: 1000
+  criterion:
+    name: cross_entropy_loss
+  optimizer:
+    name: radam
+    lr: 0.0005
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 60
+    eta_min: 0.000001
+  callbacks:
+    - name: early_stopping
+      patience: 10
+      min_delta: 0.0005
+  num_epochs: 60
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true
