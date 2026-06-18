@@ -1,5 +1,6 @@
 # Generated data and model outputs
 data/
+data_1m/
 logs/*
 !logs/.gitkeep
 
