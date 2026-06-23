@@ -44,16 +44,18 @@ train:
     name: cosine_annealing_lr
     T_max: 30
     eta_min: 0.00001
-  callbacks:
-    # Early stopping effectively DISABLED (patience >> num_epochs). JEPA must train
-    # the full schedule: the val embedding loss plateaus/bounces early but the EMA
-    # target keeps annealing toward 1.0 and the representation keeps consolidating.
-    # Stopping on the pretext loss truncates the EMA schedule and undertrains the
-    # encoder (the cause of the weak Phase 2 JEPA probe). The trainer saves the
-    # FINAL encoder, not best-val.
-    - name: early_stopping
-      patience: 100
-      min_delta: 0.000001
+  # Early stopping REMOVED entirely (not just high-patience). JEPA must train the
+  # full schedule: the val embedding loss bounces early but the EMA target keeps
+  # annealing toward 1.0 and the representation keeps consolidating. Two reasons a
+  # high-patience early_stopping callback is not enough:
+  #   1. patience>>epochs only prevents firing if the config ACTUALLY loads — a
+  #      stale config on the cluster silently re-enables the old low patience.
+  #   2. EarlyStopping.restore_best_weights defaults to True, so when it DOES fire
+  #      it reverts the model to the early best-val epoch BEFORE the trainer's
+  #      save-FINAL code runs — defeating the fix and saving an under-annealed
+  #      encoder (the real cause of the weak Phase 2 JEPA probe).
+  # With no callback, the post-loop save-FINAL writes the true epoch-30 encoder.
+  callbacks: []
   num_epochs: 30
   start_epoch: 0
   logging_dir: ./logs
