@@ -21,8 +21,8 @@ model:
     dropout: 0.1
 
   jepa:
-    ema_momentum_start: 0.996
-    ema_momentum_end: 1.0
+    ema_momentum_start: 0.999   # was 0.996; 1M has 15x more steps, so a faster
+    ema_momentum_end: 1.0       # target let the context encoder outrun it -> divergence
     use_attention_gate: true
     num_mask: 1
     mask_mode: biased
@@ -34,7 +34,7 @@ train:
     embed_dim: 128
   optimizer:
     name: radam
-    lr: 0.001
+    lr: 0.0003   # was 0.001; too high for 1M (15x more steps) -> loss bottoms ep2 then climbs
     betas: [0.95, 0.999]
   optimizer_wrapper:
     name: lookahead
@@ -43,7 +43,7 @@ train:
   scheduler:
     name: cosine_annealing_lr
     T_max: 30
-    eta_min: 0.00001
+    eta_min: 0.000003   # scaled with lr (0.001->0.0003) so cosine bottoms proportionally
   # Early stopping REMOVED entirely (not just high-patience). JEPA must train the
   # full schedule: the val embedding loss bounces early but the EMA target keeps
   # annealing toward 1.0 and the representation keeps consolidating. Two reasons a
