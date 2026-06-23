@@ -45,8 +45,14 @@ train:
     T_max: 30
     eta_min: 0.00001
   callbacks:
+    # Early stopping effectively DISABLED (patience >> num_epochs). JEPA must train
+    # the full schedule: the val embedding loss plateaus/bounces early but the EMA
+    # target keeps annealing toward 1.0 and the representation keeps consolidating.
+    # Stopping on the pretext loss truncates the EMA schedule and undertrains the
+    # encoder (the cause of the weak Phase 2 JEPA probe). The trainer saves the
+    # FINAL encoder, not best-val.
     - name: early_stopping
-      patience: 7
+      patience: 100
       min_delta: 0.000001
   num_epochs: 30
   start_epoch: 0

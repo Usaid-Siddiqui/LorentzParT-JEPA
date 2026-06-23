@@ -229,6 +229,15 @@ class JEPATrainer(Trainer):
                 if any(getattr(cb, 'should_stop', False) for cb in self.callbacks):
                     break
 
+            # JEPA: the val embedding loss is a noisy, poor proxy for representation
+            # quality, and the representation keeps consolidating as the EMA target
+            # anneals to 1.0. Save the FINAL context encoder (full schedule, stabilized
+            # target) — overrides the best-val checkpoint, which is from an early,
+            # under-annealed epoch. Pair with early stopping disabled in the config.
+            if self.best_model_path and self.rank == 0:
+                print(f"  Saving FINAL context encoder (epoch {epoch + 1}, EMA annealed)")
+                self._save_context_encoder_weights(self.best_model_path)
+
             for cb in self.callbacks:
                 cb.on_train_end(trainer=self)
 
