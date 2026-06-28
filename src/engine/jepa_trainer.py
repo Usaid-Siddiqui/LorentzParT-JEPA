@@ -25,6 +25,9 @@ from ..utils import cleanup_ddp
 from ..utils.data import JetClassDistributedSampler
 
 
+PERIODIC_SAVE_EVERY = 5  # epochs between trajectory snapshots ({run}_ep{N}.pt)
+
+
 class JEPATrainer(Trainer):
     """
     Trainer for ParticleJEPA self-supervised pretraining.
@@ -196,11 +199,23 @@ class JEPATrainer(Trainer):
                 epoch_time = time.monotonic() - epoch_start
                 elapsed_total = time.monotonic() - self._train_start_time
 
-                # Save best model (context_encoder weights, compatible with LorentzParT loader)
+                # Save best-val model (context_encoder weights, LorentzParT-loadable). The
+                # rolling best_model_path is overwritten by the FINAL save below, so also keep
+                # a preserved best copy ({run}_best.pt) for the best-vs-final probe diagnosis.
                 if self.best_model_path and self.rank == 0 and val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
                     self.best_epoch = epoch + 1
                     self._save_context_encoder_weights(self.best_model_path)
+                    _root, _ext = os.path.splitext(self.best_model_path)
+                    self._save_context_encoder_weights(f"{_root}_best{_ext}")
+
+                # Periodic trajectory snapshot every PERIODIC_SAVE_EVERY epochs. Best-val sits
+                # at the early collapse minimum and misses the recovery phase; these capture the
+                # full collapse->recovery curve so each epoch can be probed for representation
+                # quality (the JEPA pretext loss does not track it).
+                if self.best_model_path and self.rank == 0 and (epoch + 1) % PERIODIC_SAVE_EVERY == 0:
+                    _root, _ext = os.path.splitext(self.best_model_path)
+                    self._save_context_encoder_weights(f"{_root}_ep{epoch + 1}{_ext}")
 
                 # Update history
                 self.history['epoch'].append(epoch + 1)

@@ -67,6 +67,10 @@ def read_pretrain_csv(path):
     rows = []
     with open(path, newline='') as f:
         for line in csv.reader(f):
+            try:                 # skip the header row (and any blank rows)
+                float(line[0])
+            except (ValueError, IndexError):
+                continue
             if len(line) == 8:   # JEPA: epoch,emb_loss,val_loss,lr,ema,epoch_t,elapsed,best
                 rows.append((float(line[6]), float(line[2])))
             elif len(line) == 7: # MAE: epoch,train_loss,val_loss,lr,epoch_t,elapsed,best
@@ -79,6 +83,10 @@ def read_finetune_csv(path):
     rows = []
     with open(path, newline='') as f:
         for line in csv.reader(f):
+            try:                 # skip the header row (and any blank rows)
+                float(line[0])
+            except (ValueError, IndexError):
+                continue
             if len(line) >= 5:  # epoch,train_loss,train_metric,val_loss,val_metric[,lr,...]
                 rows.append((int(float(line[0])), float(line[4]), float(line[3])))
     return rows
