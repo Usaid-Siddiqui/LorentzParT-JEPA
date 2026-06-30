@@ -101,7 +101,11 @@ def load_model(args, model_cfg, device):
         if any(k.startswith('head.') for k in state_dict):
             model.load_state_dict(state_dict, strict=False)
     else:
-        model_cfg.inference = True
+        # Do NOT set inference=True: JetClassTrainer.evaluate() already applies
+        # softmax. Setting it here softmaxes in forward too -> double-softmax of
+        # y_pred, which distorts the OVO AUC and disagrees with
+        # run_phase0.evaluate_classifier (the single-softmax path used for all
+        # headline numbers).
         model = LorentzParT(config=model_cfg)
         model.load_state_dict(state_dict, strict=False)
 

@@ -66,7 +66,7 @@ def evaluate(model, loader, device):
     all_pred, all_true = [], []
     for X, y in loader:
         logits = model(X.to(device))
-        all_pred.append(logits.cpu().numpy())
+        all_pred.append(torch.softmax(logits, dim=1).cpu().numpy())  # score probabilities, not logits
         all_true.append(y.cpu().numpy())
     y_pred = np.concatenate(all_pred, axis=0)
     y_true = np.concatenate(all_true, axis=0)
