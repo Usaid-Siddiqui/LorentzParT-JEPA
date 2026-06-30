@@ -1,0 +1,21 @@
+{
+  "run_name": "eval",
+  "weights": "logs/LorentzParT/best/jepa_1m_bestft_seed456.pt",
+  "model": "lorentz_part",
+  "seed": 456,
+  "test_loss": 0.9611621135473252,
+  "test_acc": 0.65432,
+  "roc_auc_ovo": 0.9410336945,
+  "per_class_acc": {
+    "QCD/Z\u2192\u03bd\u03bd": 0.6501,
+    "H\u2192bb\u0304": 0.4382,
+    "H\u2192cc\u0304": 0.5336,
+    "H\u2192gg": 0.5658,
+    "H\u21924q": 0.7046,
+    "H\u2192\u2113\u03bdqq\u2032": 0.7474,
+    "Z\u2192qq\u0304": 0.5047,
+    "W\u2192qq\u2032": 0.5899,
+    "t\u2192bqq\u2032": 0.9021,
+    "t\u2192b\u2113\u03bd": 0.9068
+  }
+}

@@ -152,8 +152,9 @@ def evaluate_classifier(weights_path, data_dir, device, finetune_config='./confi
         config = yaml.safe_load(f)
 
     model_cfg = LorentzParTConfig.from_dict(config['model'])
-    model_cfg.inference = True  # applies softmax in forward
-
+    # NOTE: the LorentzParT constructor ignores config.inference, so the model
+    # returns logits. We softmax explicitly below before scoring — do NOT also set
+    # inference=True or it would double-softmax.
     model = LorentzParT(config=model_cfg)
     state_dict = torch.load(weights_path, map_location='cpu', weights_only=True)
     model.load_state_dict(state_dict, strict=False)
@@ -169,7 +170,7 @@ def evaluate_classifier(weights_path, data_dir, device, finetune_config='./confi
 
     all_pred, all_true = [], []
     for X, y in loader:
-        all_pred.append(model(X.to(device)).cpu().numpy())
+        all_pred.append(torch.softmax(model(X.to(device)), dim=1).cpu().numpy())  # probabilities, not logits
         all_true.append(y.numpy())
 
     y_pred = np.concatenate(all_pred, axis=0)
