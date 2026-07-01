@@ -25,7 +25,13 @@ Pretrain time comes from the seed JSONs (pretrain_time_s); finetune wall-clock
 comes from the finetune CSVs in logs/, so run this ON THE CLUSTER.
 
     python experiments/phase2/plot_walltime.py \\
-        --results-dir experiments/phase2/results --tag 1m --seeds 42 123 456
+        --results-dir experiments/phase2/results --tag 1m --seeds 42 123 456 \\
+        --jepa-encoder best      # charge JEPA only to its best-val epoch (~1h), not the full 4h
+
+--jepa-encoder final (default) charges JEPA the full pretrain and uses the final
+encoder's finetune; --jepa-encoder best uses the best-val encoder (pretrain timed
+to the val-loss minimum + --jepa-patience epochs, finetune = *_bestft_*). Output
+is walltime_convergence.png / walltime_convergence_bestval.png respectively.
 """
 
 import argparse
@@ -39,13 +45,46 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-# (label, JSON condition key, finetune-CSV stem, colour). scratch's CSV has no
-# '_ft_' tag — matches run_phase2's naming.
-METHODS = [
-    ('JEPA',    'jepa_finetune', 'jepa_{tag}_ft_seed{s}',  '#1f77b4'),
+# Base (label, JSON condition key, finetune-CSV stem, colour) for MAE/scratch.
+# The JEPA row is built in main() so --jepa-encoder can switch it between the
+# final encoder and the (cheaper, ~equal-accuracy) best-val encoder.
+BASE_METHODS = [
     ('MAE',     'mae_finetune',  'mae_{tag}_ft_seed{s}',   '#2ca02c'),
     ('Scratch', 'scratch',       'scratch_{tag}_seed{s}',  '#ff7f0e'),
 ]
+
+
+def bestval_pretrain_seconds(pretrain_csv, patience):
+    """Elapsed_total_s at the val-loss minimum + `patience` epochs — the honest
+    stopping point for taking the best-val encoder (you must train a little past
+    the minimum to confirm it). JEPA pretrain CSV cols:
+    epoch,emb_loss,val_loss,lr,ema,epoch_t,elapsed,best."""
+    if not os.path.exists(pretrain_csv):
+        return None
+    rows = []
+    with open(pretrain_csv) as f:
+        for r in csv.reader(f):
+            try:
+                rows.append((int(float(r[0])), float(r[2]), float(r[6])))  # epoch, val_loss, elapsed
+            except (ValueError, IndexError):
+                continue
+    if not rows:
+        return None
+    best_ep = min(rows, key=lambda t: t[1])[0]
+    cand = [e for e in rows if e[0] >= best_ep + patience]
+    return (cand[0][2] if cand else rows[-1][2])
+
+
+def bestft_auc(diag_dir, seed):
+    """Best-val finetune OVO AUC from diag_bestft (roc_auc_ovo); None if absent."""
+    for name in (f'seed{seed}.json', f'seed_{seed}.json'):
+        p = os.path.join(diag_dir, name)
+        if os.path.exists(p):
+            try:
+                return float(json.load(open(p)).get('roc_auc_ovo'))
+            except Exception:
+                return None
+    return None
 
 
 def read_ft_csv(path):
@@ -83,9 +122,26 @@ def main():
     p.add_argument('--seeds',       nargs='+', type=int, default=[42, 123, 456])
     p.add_argument('--tag',         default='1m')
     p.add_argument('--output-dir',  default=None, help='defaults to --results-dir')
+    p.add_argument('--jepa-encoder', choices=['final', 'best'], default='final',
+                   help="'final': full-schedule encoder (pretrain = full run). "
+                        "'best': best-val encoder (pretrain charged only to the val-loss "
+                        "minimum + patience) — ~equal accuracy, far cheaper.")
+    p.add_argument('--jepa-pretrain-dir', default='./logs/ParticleJEPA/logging',
+                   help="JEPA pretrain CSVs (to time the best-val epoch).")
+    p.add_argument('--jepa-patience', type=int, default=5,
+                   help="epochs past the val-loss minimum to charge as pretrain "
+                        "for --jepa-encoder best (honest deployable stop).")
+    p.add_argument('--jepa-bestft-json', default='./experiments/phase2/diag_bestft',
+                   help="dir with best-val finetune JSONs (roc_auc_ovo) for the AUC label.")
     args = p.parse_args()
     out = args.output_dir or args.results_dir
     os.makedirs(out, exist_ok=True)
+
+    # JEPA row depends on the chosen encoder; best-val uses the *_bestft_* finetune.
+    jbest  = args.jepa_encoder == 'best'
+    jlabel = 'JEPA (best-val)' if jbest else 'JEPA'
+    jstem  = 'jepa_{tag}_bestft_seed{s}' if jbest else 'jepa_{tag}_ft_seed{s}'
+    METHODS = [(jlabel, 'jepa_finetune', jstem, '#1f77b4')] + BASE_METHODS
 
     agg = {m[0]: {'pre': [], 'ft': [], 'auc': []} for m in METHODS}
     ft_curves    = defaultdict(list)   # label -> [(finetune_hours, val_metric), ...]
@@ -101,6 +157,15 @@ def main():
             c = cond.get(key, {})
             pre = c.get('pretrain_time_s') or 0.0
             auc = c.get('test_auc')
+            if label == jlabel and jbest:                    # best-val JEPA: cheaper pretrain + its own AUC
+                bp = bestval_pretrain_seconds(
+                    os.path.join(args.jepa_pretrain_dir, f'jepa_{args.tag}_seed{s}.csv'),
+                    args.jepa_patience)
+                if bp is not None:
+                    pre = bp
+                ba = bestft_auc(args.jepa_bestft_json, s)
+                if ba is not None:
+                    auc = ba
             csvp = os.path.join(args.logs_dir, stem.format(tag=args.tag, s=s) + '.csv')
             if not os.path.exists(csvp):
                 print(f'[warn] missing finetune CSV {csvp}')
@@ -149,7 +214,7 @@ def main():
         ax.set_xlabel(xlabel)
         ax.legend(loc='lower right')
     # mark where each pretrained method begins finetuning on the total-clock panel
-    for label in ('JEPA', 'MAE'):
+    for label in (jlabel, 'MAE'):
         if pre_h[label] > 0:
             axR.axvline(pre_h[label], ls=':', color=colors[label], lw=1.2)
             axR.text(pre_h[label], axR.get_ylim()[0], f' {label} ft start',
@@ -157,8 +222,9 @@ def main():
     axL.set_ylabel('val metric (accuracy)')
     fig.suptitle('Time-to-accuracy: finetune-only vs. total (pretrain-charged) wall-clock', y=1.02)
     fig.tight_layout()
-    fig.savefig(os.path.join(out, 'walltime_convergence.png'), dpi=300, bbox_inches='tight')
-    print('wrote walltime_convergence.png')
+    fname = 'walltime_convergence_bestval.png' if jbest else 'walltime_convergence.png'
+    fig.savefig(os.path.join(out, fname), dpi=300, bbox_inches='tight')
+    print('wrote', fname)
 
     # ---- table ----
     print(f"\n{'method':10s}{'pretrain_h':>12s}{'finetune_h':>12s}{'total_h':>10s}{'auc':>9s}")

@@ -97,7 +97,7 @@ def main():
     ax.set_xticklabels(GROUPS, fontsize=12)
     ax.set_ylabel('OVO ROC AUC', fontsize=11)
     ax.set_ylim(0.6, 0.85)
-    ax.set_title(f'Biased masking helps both objectives  (gate off, n={n} seeds, ±1 std)',
+    ax.set_title(f'Biased masking helps MAE, ~neutral for JEPA  (gate off, n={n} seeds, ±1 std)',
                  fontsize=11)
     ax.legend(fontsize=10)
     ax.grid(axis='y', alpha=0.35)
