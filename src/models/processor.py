@@ -130,3 +130,49 @@ class InteractionEmbedding(nn.Module):
         U = U.view(B * U.shape[1], N, N)  # (B * num_heads, N, N)
 
         return U
+
+
+class RaggedInteractionEmbedding(nn.Module):
+    """Padding-aware drop-in for ``InteractionEmbedding``.
+
+    A jet's ``N x N`` pair matrix is ~90% padding for typical events, yet the stock
+    module runs its ``BatchNorm1d -> [Linear -> BatchNorm1d -> GELU] * L`` MLP over
+    all ``B * N * N`` positions. This gathers only the VALID pairs into ``(M, F)``
+    with ``M << B * N * N``, runs the same MLP once, then scatters back — the
+    BatchNorm-dominated cost drops with the valid-pair count.
+
+    It reuses the EXACT SAME layer stack as ``InteractionEmbedding`` (BatchNorm1d +
+    Conv1d(k=1) + GELU) — the gathered pairs are shaped ``(1, C, M)`` so a
+    ``Conv1d(k=1)`` applies per-pair over channels — so its ``embed`` state_dict is
+    identical to the stock module's and a pretrained/stock checkpoint loads directly
+    (enabling a same-weights ragged-vs-stock A/B). Two deliberate differences from
+    stock: (1) BatchNorm normalizes over valid pairs only — a semantic change that
+    also sidesteps the stock module's -1e9-padding BN-stat corruption, so it needs
+    downstream accuracy re-validation; (2) the scatter is out-of-place
+    (``index_copy``) for clean autograd.
+    """
+
+    def __init__(
+        self,
+        num_interaction_features: int = 4,
+        pair_embed_dims: List[int] = [64, 64, 64, 8],
+    ):
+        super(RaggedInteractionEmbedding, self).__init__()
+        layers = [nn.BatchNorm1d(num_interaction_features)]
+        input_dim = num_interaction_features
+        for dim in pair_embed_dims:
+            layers.extend([nn.Conv1d(input_dim, dim, kernel_size=1), nn.BatchNorm1d(dim), nn.GELU()])
+            input_dim = dim
+        self.embed = nn.Sequential(*layers)  # identical to InteractionEmbedding.embed
+        self.out_dim = pair_embed_dims[-1]
+
+    def forward(self, U: Tensor, valid_pairs: Tensor) -> Tensor:
+        # U: (B, N, N, F); valid_pairs: (B, N, N) bool (both particles non-padding)
+        B, N, _, F = U.shape
+        flat = U.reshape(B * N * N, F)
+        idx = valid_pairs.reshape(-1).nonzero(as_tuple=True)[0]   # (M,) valid-pair rows
+        sel = flat.index_select(0, idx).t().unsqueeze(0)         # (1, F, M) -> Conv1d over M pairs
+        h = self.embed(sel).squeeze(0).t()                       # (M, out_dim)
+        out = flat.new_zeros(B * N * N, self.out_dim).index_copy(0, idx, h)
+        # (B, N, N, H) -> (B, H, N, N) -> (B * H, N, N), matching InteractionEmbedding
+        return out.view(B, N, N, self.out_dim).permute(0, 3, 1, 2).reshape(B * self.out_dim, N, N)

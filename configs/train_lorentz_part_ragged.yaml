@@ -1,0 +1,57 @@
+# Fine-tuning LorentzParT with the PADDING-AWARE (ragged) interaction embedding.
+#
+# Identical to train_lorentz_part.yaml except model.ragged_pair_embed: true — the
+# Phase-3 A/B partner. Same pretrained encoder loads into both (Conv1d weights are
+# checkpoint-compatible), so the only difference is the pair-embedding algorithm.
+
+model:
+  name: lorentz_part
+  max_num_particles: 128
+  num_particle_features: 4
+  num_classes: 10
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  num_cls_layers: 2
+  num_mlp_layers: 0
+  hidden_dim: 256
+  hidden_mv_channels: 8
+  in_s_channels: null
+  out_s_channels: null
+  hidden_s_channels: 16
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  mask: false
+  weights: null   # override on command line: --weights path/to/encoder.pt
+  ragged_pair_embed: true
+
+train:
+  batch_size: 1000
+  criterion:
+    name: cross_entropy_loss
+  optimizer:
+    name: radam
+    lr: 0.0005
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.000001
+  callbacks:
+    - name: early_stopping
+      patience: 7
+      min_delta: 0.0005
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: true
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true

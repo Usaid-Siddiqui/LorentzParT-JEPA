@@ -7,7 +7,7 @@ from lgatr.layers import EquiLinear
 
 from .classifier import ClassAttentionBlock, Classifier
 from .particle_transformer import ParticleAttentionBlock
-from .processor import InteractionEmbedding, ParticleProcessor
+from .processor import InteractionEmbedding, RaggedInteractionEmbedding, ParticleProcessor
 from ..configs import LorentzParTConfig
 
 
@@ -21,7 +21,8 @@ class LorentzParTEncoder(nn.Module):
         out_s_channels: Optional[int] = None,
         dropout: float = 0.1,
         expansion_factor: int = 4,
-        pair_embed_dims: List[int] = [64, 64, 64]
+        pair_embed_dims: List[int] = [64, 64, 64],
+        ragged_pair_embed: bool = False
     ):
         super(LorentzParTEncoder, self).__init__()
         self.equilinear = EquiLinear(
@@ -31,7 +32,9 @@ class LorentzParTEncoder(nn.Module):
             out_s_channels=out_s_channels
         )
         self.proj = nn.Linear(16, embed_dim)
-        self.interaction_embed = InteractionEmbedding(
+        self.ragged_pair_embed = ragged_pair_embed
+        embed_cls = RaggedInteractionEmbedding if ragged_pair_embed else InteractionEmbedding
+        self.interaction_embed = embed_cls(
             num_interaction_features=4,
             pair_embed_dims=pair_embed_dims + [num_heads]
         )
@@ -48,7 +51,12 @@ class LorentzParTEncoder(nn.Module):
         B, N, F = x.shape  # (batch_size, max_num_particles, 16)
 
         # Embed interaction features
-        U = self.interaction_embed(U)  # (B * num_heads, N, N)
+        if self.ragged_pair_embed:
+            valid = padding_mask == 0  # (B, N) True where non-padding (masked particles count as valid)
+            valid_pairs = valid[:, :, None] & valid[:, None, :]  # (B, N, N)
+            U = self.interaction_embed(U, valid_pairs)  # (B * num_heads, N, N)
+        else:
+            U = self.interaction_embed(U)  # (B * num_heads, N, N)
 
         # Pass through the EquiLinear layer
         x = x.view(B, N, 1, F)
@@ -149,7 +157,8 @@ class LorentzParT(nn.Module):
         pair_embed_dims: Optional[List[int]] = None,
         mask: Optional[bool] = None,
         weights: Optional[str] = None,
-        inference: Optional[bool] = False
+        inference: Optional[bool] = False,
+        ragged_pair_embed: Optional[bool] = None
     ):
         super(LorentzParT, self).__init__()
 
@@ -178,6 +187,7 @@ class LorentzParT(nn.Module):
             self.mask = mask if mask is not None else config.mask
             self.weights = weights if weights is not None else config.weights
             self.inference = inference if inference is not None else config.inference
+            self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else getattr(config, 'ragged_pair_embed', False)
         else:
             self.max_num_particles = max_num_particles if max_num_particles is not None else 128
             self.num_particle_features = num_particle_features if num_particle_features is not None else 4
@@ -202,6 +212,7 @@ class LorentzParT(nn.Module):
             self.mask = mask if mask is not None else False
             self.weights = weights if weights is not None else None
             self.inference = inference if inference is not None else False
+            self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else False
 
         # Initialize the class token
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim), requires_grad=True)
@@ -216,7 +227,8 @@ class LorentzParT(nn.Module):
             out_s_channels=self.out_s_channels,
             dropout=self.dropout,
             expansion_factor=self.expansion_factor,
-            pair_embed_dims=self.pair_embed_dims
+            pair_embed_dims=self.pair_embed_dims,
+            ragged_pair_embed=self.ragged_pair_embed
         )
 
         # For self-supervised learning

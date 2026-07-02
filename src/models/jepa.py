@@ -92,6 +92,7 @@ class ParticleJEPA(nn.Module):
         max_num_particles: int = 128,
         ema_momentum: float = 0.996,
         use_attention_gate: bool = True,
+        ragged_pair_embed: bool = False,
     ):
         super().__init__()
 
@@ -112,6 +113,7 @@ class ParticleJEPA(nn.Module):
             dropout=dropout,
             expansion_factor=expansion_factor,
             pair_embed_dims=pair_embed_dims,
+            ragged_pair_embed=ragged_pair_embed,
         )
 
         # Attention gate: soft per-particle importance weighting from U

@@ -31,11 +31,10 @@ import sys
 import time
 
 import torch
-import torch.nn as nn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.models.processor import ParticleProcessor, InteractionEmbedding
+from src.models.processor import ParticleProcessor, InteractionEmbedding, RaggedInteractionEmbedding
 
 
 def make_inputs(batch, n_particles, device, seed=0):
@@ -54,31 +53,6 @@ def make_inputs(batch, n_particles, device, seed=0):
     _, U = proc(x)                                                # U: (B, N, N, 4), padded pairs = -1e9
     valid_pairs = mask[:, :, None] & mask[:, None, :]             # (B, N, N) bool
     return U, valid_pairs
-
-
-class RaggedInteractionEmbedding(nn.Module):
-    """Padding-aware equivalent of InteractionEmbedding: run the same
-    BN -> [Linear -> BN -> GELU]*L stack on only the valid pairs. Conv1d(k=1) over
-    (B,C,L) is per-position Linear over channels, so this is the same MLP structure;
-    the difference is it processes M valid pairs instead of B*N*N."""
-
-    def __init__(self, num_features=4, pair_embed_dims=(64, 64, 64, 8)):
-        super().__init__()
-        self.in_bn = nn.BatchNorm1d(num_features)
-        layers, inp = [], num_features
-        for d in pair_embed_dims:
-            layers += [nn.Linear(inp, d), nn.BatchNorm1d(d), nn.GELU()]
-            inp = d
-        self.mlp = nn.Sequential(*layers)
-        self.out_dim = pair_embed_dims[-1]
-
-    def forward(self, U, valid_pairs):
-        B, N, _, _ = U.shape
-        sel = U[valid_pairs]                      # (M, 4) — gather valid pairs only
-        h = self.mlp(self.in_bn(sel))             # (M, H)
-        out = U.new_zeros(B, N, N, self.out_dim)
-        out[valid_pairs] = h                      # scatter back
-        return out.permute(0, 3, 1, 2).reshape(B * self.out_dim, N, N)
 
 
 def bench(run, iters, warmup, cuda):

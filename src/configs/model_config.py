@@ -59,6 +59,7 @@ class LorentzParTConfig(BaseModelConfig):
     reinsert_s_channels: Optional[Tuple[int]] = None
     pair_embed_dims: List[int] = field(default_factory=lambda: [64, 64, 64])
     mask_mode: str = 'random'
+    ragged_pair_embed: bool = False   # padding-aware interaction embedding (Phase 3)
 
     @classmethod
     def from_dict(cls, d: Dict):
@@ -84,6 +85,7 @@ class JEPAConfig(BaseModelConfig):
     use_attention_gate: bool = True
     num_mask: int = 1
     mask_mode: str = 'random'
+    ragged_pair_embed: bool = False   # padding-aware interaction embedding (Phase 3)
 
     @classmethod
     def from_dict(cls, d: Dict):
