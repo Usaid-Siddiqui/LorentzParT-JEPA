@@ -1,0 +1,8 @@
+{
+  "flops_per_jet": {
+    "jepa_pretrain": 3263721952.0,
+    "mae_pretrain": 2293368960.0,
+    "finetune": 2344889152.0
+  },
+  "batch": 32
+}
