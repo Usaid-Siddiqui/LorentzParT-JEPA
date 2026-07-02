@@ -58,6 +58,28 @@ def _categorize(name):
     return 'other', '#7f7f7f'
 
 
+def _short_label(name, max_len=44):
+    """Shorten a profiler op/kernel name for a y-axis label. CUDA kernel names are
+    often full C++ template signatures (e.g. 'void cudnn::bn_bw_1C11_kernel_new<
+    float, float, floa...'); this drops the 'void' prefix and template args, then
+    keeps the most specific trailing '::'-segments that fit in max_len."""
+    n = name.strip()
+    if n.startswith('void '):
+        n = n[5:]
+    n = n.split('<', 1)[0].strip().rstrip(':').strip()   # drop template args
+    if len(n) > max_len:
+        parts = n.split('::')
+        kept = parts[-1]
+        for p in reversed(parts[:-1]):
+            if len(kept) + len(p) + 2 > max_len - 1:
+                break
+            kept = f'{p}::{kept}'
+        n = kept
+    if len(n) > max_len:
+        n = n[:max_len - 1] + '…'
+    return n
+
+
 def _self_time_us(e, cuda):
     """Self device (CUDA) time if profiling GPU, else self CPU time — robust across
     torch versions (self_device_time_total is the newer name for self_cuda_time_total)."""
@@ -84,18 +106,19 @@ def plot_top_ops(events, cuda, out_path, batch, n_particles, top_n):
     top = rows[:top_n]
     rest = sum(t for _, t in rows[top_n:])
 
-    names = [k for k, _ in top]
+    names = [k for k, _ in top]                       # full names, kept for categorization
     vals  = [t / 1e3 for _, t in top]                 # ms
     cols  = [_categorize(k)[1] for k in names]
     if rest > 0:
         names.append(f'(other · {len(rows) - top_n} ops)'); vals.append(rest / 1e3); cols.append('#cccccc')
+    labels = [_short_label(n) for n in names]         # shortened, for display only
 
     y = range(len(names))[::-1]                        # largest at top
     fig, ax = plt.subplots(figsize=(10, max(4, 0.42 * len(names) + 1)))
     ax.barh(list(y), vals, color=cols, edgecolor='black', linewidth=0.4)
     for yi, v in zip(y, vals):
         ax.text(v, yi, f' {v:.1f}ms ({100 * v * 1e3 / total:.0f}%)', va='center', fontsize=8)
-    ax.set_yticks(list(y)); ax.set_yticklabels(names, fontsize=8, fontfamily='monospace')
+    ax.set_yticks(list(y)); ax.set_yticklabels(labels, fontsize=8, fontfamily='monospace')
     ax.set_xlabel(f"self {'CUDA' if cuda else 'CPU'} time (ms, summed over profiled steps)")
     ax.set_title(f"LorentzParT backbone hotspots · batch {batch} · {n_particles} particles · "
                  f"{'GPU' if cuda else 'CPU'}")
