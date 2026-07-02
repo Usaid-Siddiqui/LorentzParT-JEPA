@@ -141,17 +141,20 @@ def read_ft_csv(path):
     return np.array(vm), np.array(el), np.array(ep, dtype=float)
 
 
-def mean_curve(seed_curves, n=200):
-    """seed_curves: [(x, y), ...]. Interpolate onto the shared x-overlap, average."""
+def mean_curve(seed_curves, x_end=None, n=200):
+    """seed_curves: [(x, y), ...]. Average across seeds via forward-fill (a seed
+    that ended early holds its final value — it has plateaued/early-stopped), so
+    the mean curve spans the full range instead of stopping at the shortest seed.
+    The bold line ends at `x_end` (the method's MEAN cost) so its endpoint matches
+    the printed table rather than the shortest-seed's cost."""
     if not seed_curves:
         return None, None
-    lo = max(x[0] for x, _ in seed_curves)
-    hi = min(x[-1] for x, _ in seed_curves)
-    if hi <= lo:                                # no overlap → use the longest curve
-        x, y = max(seed_curves, key=lambda c: c[0][-1])
-        return x, y
+    lo = min(x[0] for x, _ in seed_curves)
+    hi = x_end if x_end is not None else max(x[-1] for x, _ in seed_curves)
+    if hi <= lo:
+        return None, None
     grid = np.linspace(lo, hi, n)
-    ys = np.array([np.interp(grid, x, y) for x, y in seed_curves])
+    ys = np.array([np.interp(grid, x, y, left=y[0], right=y[-1]) for x, y in seed_curves])
     return grid, ys.mean(axis=0)
 
 
@@ -270,15 +273,16 @@ def main():
     scratch_acc = (np.mean([c[1][-1] for c in ft_curves['Scratch']])
                    if ft_curves['Scratch'] else None)
 
+    total_c = {l: pre_c[l] + ft_c[l] for l in labels}
     fig, (axL, axR) = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
-    for ax, curves, title, xlabel in [
-        (axL, ft_curves,    'Finetune-only cost (head start)',           f'finetune {unit}'),
-        (axR, total_curves, 'Total cost = pretrain + finetune (bill)',   f'cumulative {unit}'),
+    for ax, curves, ends, title, xlabel in [
+        (axL, ft_curves,    ft_c,    'Finetune-only cost (head start)',          f'finetune {unit}'),
+        (axR, total_curves, total_c, 'Total cost = pretrain + finetune (bill)',  f'cumulative {unit}'),
     ]:
         for label in labels:
             for cx, cy in curves[label]:
                 ax.plot(cx, cy, color=colors[label], alpha=0.22, lw=1)
-            mx, my = mean_curve(curves[label])
+            mx, my = mean_curve(curves[label], x_end=ends.get(label))
             if mx is not None:
                 ax.plot(mx, my, color=colors[label], lw=2.2, label=label)
                 if not np.isnan(auc[label]):    # tie convergence curve back to headline AUC
