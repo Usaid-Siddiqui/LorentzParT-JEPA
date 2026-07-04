@@ -72,6 +72,7 @@ def parse_args():
 
 def main(rank, world_size, seed, config_path, data_dir, weights, run_name, checkpoint_path=None):
     set_seed(seed)
+    torch.set_float32_matmul_precision('high')  # TF32 on tensor cores: ~1.5-2x GEMMs, negligible acc impact
     setup_ddp(rank, world_size)
     device = torch.device(f'cuda:{rank}' if torch.cuda.is_available() else 'cpu')
 

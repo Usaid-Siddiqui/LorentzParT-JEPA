@@ -33,9 +33,21 @@ from src.configs import LorentzParTConfig
 from src.models import LorentzParT
 
 
-def make_batch(batch, n_particles, device):
-    """(B, N, 4) inputs with no padded slots (energy != 0 -> nothing read as padding),
-    so every particle slot is active -> the backbone's worst-case / upper-bound cost."""
+def make_batch(batch, n_particles, device, realistic_padding=False):
+    """(B, N, 4) inputs.
+
+    Default: no padded slots (all N active) — the backbone's upper-bound cost, and
+    padding-independent (fine for profiling the STOCK dense path, which always processes
+    all N^2 pairs). realistic_padding=True: per-jet valid count ~ N(40, 18) clamped to
+    [5, N] (median ~40 -> ~90% padding) — REQUIRED to profile the RAGGED backbone, which
+    only skips work when padding is actually present."""
+    if realistic_padding:
+        g = torch.Generator(device='cpu').manual_seed(0)
+        n_valid = torch.normal(40.0, 18.0, (batch,), generator=g).round().clamp(5, n_particles).long()
+        mask = (torch.arange(n_particles)[None, :] < n_valid[:, None]).to(device)
+        x = torch.randn(batch, n_particles, 4, device=device) * mask[..., None]
+        x[..., 3] = torch.where(mask, x[..., 3].abs() + 0.5, torch.zeros_like(x[..., 3]))
+        return x
     x = torch.randn(batch, n_particles, 4, device=device)
     x[..., 3] = x[..., 3].abs() + 1.0
     return x
@@ -152,11 +164,15 @@ def main():
     p.add_argument('--plot-out', default=None,
                    help="write a hotspot bar chart (self-time per op, coloured by subsystem)")
     p.add_argument('--plot-top', type=int, default=15, help="ops to show in --plot-out")
+    p.add_argument('--realistic-padding', action='store_true',
+                   help="variable per-jet valid particles (~90%% padding); REQUIRED to profile "
+                        "a ragged config (else no padding to skip -> ragged looks like dense)")
     args = p.parse_args()
 
     device = torch.device(args.device)
     cuda = device.type == 'cuda'
     torch.manual_seed(0)
+    torch.set_float32_matmul_precision('high')  # match training (TF32 on) so the profile reflects real GEMMs
 
     with open(args.config_path) as f:
         cfg = LorentzParTConfig.from_dict(yaml.safe_load(f)['model'])
@@ -164,11 +180,13 @@ def main():
 
     model = LorentzParT(config=cfg).to(device).train()
     n_params = sum(p.numel() for p in model.parameters())
-    x = make_batch(args.batch, n_particles, device)
+    x = make_batch(args.batch, n_particles, device, realistic_padding=args.realistic_padding)
 
     print(f"LorentzParT backbone | params={n_params/1e6:.2f}M | device={device} | "
           f"batch={args.batch} particles={n_particles} | "
-          f"{'fwd' if args.fwd_only else 'fwd+bwd'}")
+          f"{'fwd' if args.fwd_only else 'fwd+bwd'} | "
+          f"padding={'realistic ~90%' if args.realistic_padding else 'none (upper-bound)'} | "
+          f"ragged={'on' if getattr(cfg, 'ragged_pair_embed', False) else 'off'}")
 
     def step():
         model.zero_grad(set_to_none=True)
