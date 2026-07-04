@@ -21,6 +21,7 @@ Re-run to resume (finished checkpoints are skipped).
 
 import argparse
 import csv
+import json
 import os
 import statistics
 import subprocess
@@ -80,7 +81,13 @@ def evaluate(ckpt, data_dir, device, finetune_config):
     y_pred, y_true = np.concatenate(pred), np.concatenate(true)
     acc = float((np.argmax(y_pred, 1) == np.argmax(y_true, 1)).mean())
     auc = float(roc_auc_score(y_true, y_pred, average='macro', multi_class='ovo'))
-    return acc, auc
+    per_class_acc, per_class_auc = [], []
+    for i in range(10):
+        m = np.argmax(y_true, 1) == i
+        per_class_acc.append(float((np.argmax(y_pred[m], 1) == i).mean()) if m.sum() else 0.0)
+        per_class_auc.append(float(roc_auc_score((np.argmax(y_true, 1) == i).astype(int), y_pred[:, i])))
+    return {'test_acc': acc, 'test_auc': auc,
+            'per_class_acc': per_class_acc, 'per_class_auc': per_class_auc}
 
 
 def median_epoch_s(csv_path):
@@ -111,6 +118,8 @@ def main():
     p.add_argument('--data-dir', default='./data')
     p.add_argument('--seeds', nargs='+', type=int, default=[42, 123, 456])
     p.add_argument('--gpu', type=int, default=0)
+    p.add_argument('--results-dir', default='./experiments/phase3/results',
+                   help='seed_N.json output for analyze_results.py bar charts')
     args = p.parse_args()
 
     python = sys.executable
@@ -118,8 +127,10 @@ def main():
     env['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
     device = torch.device(f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu')
 
+    os.makedirs(args.results_dir, exist_ok=True)
     rows = []   # (cond, seed, acc, auc, pre_ep_s, ft_ep_s)
     for seed in args.seeds:
+        seed_conditions = {}   # cond -> metrics dict, dumped as analyze_results seed_N.json
         for cond, (pre_cfg, ft_cfg) in CONDITIONS.items():
             pre_run, ft_run = f'jrag_{cond}_seed{seed}', f'ftrag_{cond}_seed{seed}'
             pre_ckpt = f'./logs/ParticleJEPA/best/{pre_run}.pt'
@@ -140,11 +151,19 @@ def main():
             else:
                 print(f"[skip finetune] {ft_ckpt} exists")
 
-            acc, auc = evaluate(ft_ckpt, args.data_dir, device, ft_cfg)
+            metrics = evaluate(ft_ckpt, args.data_dir, device, ft_cfg)
             pre_ep = median_epoch_s(f'./logs/ParticleJEPA/logging/{pre_run}.csv')
             ft_ep = median_epoch_s(f'./logs/LorentzParT/logging/{ft_run}.csv')
-            rows.append((cond, seed, acc, auc, pre_ep, ft_ep))
-            print(f"  {cond:6s} seed{seed}: acc={acc:.4f} auc={auc:.4f}")
+            metrics['pretrain_epoch_s'], metrics['finetune_epoch_s'] = pre_ep, ft_ep
+            seed_conditions[cond] = metrics
+            rows.append((cond, seed, metrics['test_acc'], metrics['test_auc'], pre_ep, ft_ep))
+            print(f"  {cond:6s} seed{seed}: acc={metrics['test_acc']:.4f} auc={metrics['test_auc']:.4f}")
+
+        # dump analyze_results-compatible seed JSON
+        out_json = os.path.join(args.results_dir, f'seed_{seed}.json')
+        with open(out_json, 'w') as f:
+            json.dump({'seed': seed, 'conditions': seed_conditions}, f, indent=2)
+        print(f"  wrote {out_json}")
 
     # ---- report ----
     print(f"\n{'cond':7s}{'seed':>6s}{'acc':>9s}{'auc':>9s}{'pre_ep_s':>10s}{'ft_ep_s':>10s}")

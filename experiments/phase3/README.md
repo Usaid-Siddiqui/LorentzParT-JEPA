@@ -170,8 +170,80 @@ what fraction of ragged's AUC gain `fill0` recovers:
 - fill0 between stock and ragged => ragged's valid-only normalization adds something the
   0-fill approximation doesn't (0-fill still dilutes BN stats with the padded zeros).
 Verified builds: stock/fill0 -> `InteractionEmbedding` (pad_fill -1e9 / 0.0), ragged ->
-`RaggedInteractionEmbedding`. **Run pending** (re-run the same e2e command; stock+ragged
-checkpoints are skipped, only the 6 new fill0 stages train).
+`RaggedInteractionEmbedding`.
+
+### 2026-07-02 — 🔑 DECOMP RESULT: the +0.15 AUC is PURELY the BN fix (airtight)
+100k e2e, 3-way (3 seeds, softmax OVO AUC):
+
+| | AUC | Δ vs stock | speed (pre / ft) |
+|---|---|---|---|
+| stock (dense, −1e9) | 0.7862 ± 0.0222 | — | 1.0× / 1.0× |
+| **ragged** (skip padding) | 0.9345 ± 0.0020 | **+0.148** | **1.95× / 2.10×** |
+| **fill0** (dense, fill 0) | 0.9402 ± 0.0006 | **+0.154** | 0.99× / 1.00× |
+
+`DECOMP: dense fill0 recovers 104% of ragged's +0.148 AUC gain`. So **the accuracy win is
+100% the BN-corruption fix (removing −1e9), and ragged's speed is fully orthogonal.** Clean
+separable story proven: BN-fix → +0.15 AUC; padding-skip → 2× speed / 5.6× mem; ragged =
+both. **Curiosity:** fill0 edges ragged by a consistent ~0.006 (all 3 seeds) and is far
+tighter (±0.0006 vs ±0.0020) — most likely because ragged's *variable*-M valid-pair
+BatchNorm has noisier batch stats than fill0's fixed-N² BN. Minor; doesn't change the call
+(ragged for speed+accuracy; fill0 if you want the last 0.006 without the speed).
+
+---
+
+## Root-cause analysis: a reimplementation bug, NOT a ParT bug
+
+### The two changes we made
+1. **Ragged interaction embedding** — gather only valid pairs, run the BN+Conv MLP on
+   them, scatter back (skip the ~90% padding). Purpose: speed (2× / 5.6× mem).
+2. **Removed the `-1e9` padding fill** — the stock code fills padded pairs with `-1e9`
+   *before* the leading `BatchNorm1d`. Both the ragged path (which never sees padded
+   pairs) and the `fill0` control (dense, fill `0.0`) eliminate the `-1e9` from the BN
+   statistics. Purpose: correctness.
+
+Change (2) is what produced the +0.15 AUC. Profiling for change (1) is what made us look
+at this code at all — so the speed hunt is what surfaced the correctness bug.
+
+### How it traced to Thanh's code but not the original ParT
+Checked the reference `weaver-core` ParT (`weaver/nn/model/ParticleTransformer.py`):
+- `PairEmbed` defaults `sparse_eval=(True, True)`, so `forward` uses **`_forward_sparse`**
+  (lines 545–579) in both train and eval whenever a mask is present. That path masks
+  padded pairs OUT (`pair_mask.nonzero()` → gather valid pairs → BN over valid → scatter)
+  — i.e. **the original ParT already does exactly our "ragged" fix, by default.**
+- grep for `1e9 / -inf / full_like / fill_value` across the whole file → **none**. The
+  only floors are `eps=1e-8` clamps inside `pairwise_lv_fts`, so even the dense fallback
+  yields finite padded values (~−18), never `-1e9`.
+
+**So the original ParT is correct.** Thanh's reimplementation introduced a regression by
+(a) **adding** the `-1e9` fill (`processor.py:70`) and (b) **dropping** the masked/sparse
+path — leaving a single dense forward that BatchNorms over the `-1e9`-poisoned tensor.
+Root of the conceptual error: `-1e9` is an *attention-mask* value (correct as a
+pre-softmax bias to kill padded keys); it was misapplied to the *BatchNorm inputs* of
+the interaction features, where it doesn't mask anything and just dominates the stats.
+
+Consequences for framing: our "ragged" method is **not novel** (it re-derives weaver's
+`_forward_sparse`), and this is **not a ParT bug**. It's a correctness fix for our
+pipeline + a candidate PR to the ML4Sci repo. Paper wording: *"corrected the interaction
+embedding to match the reference weaver ParT (masks padded pairs from normalization)."*
+
+### ⚠️ Open question: how did Thanh's Hybrid "outperform" ParT with this bug?
+The bug lives in a **shared** component. Thanh's ParT baseline imports the *same* buggy
+`InteractionEmbedding` (`particle_transformer.py:8,66`), and LGATr (`lorentz_gatr.py`)
+has no interaction embedding at all (pure equivariant attention, immune). So every
+in-repo comparison was **broken-vs-broken (Hybrid vs ParT) or broken-vs-immune (vs
+LGATr)** — nobody had a working pair bias, so nothing looked anomalous.
+
+That reframes the "Hybrid beats ParT" result: it was **Hybrid vs Thanh's own equally
+broken ParT, not a working one.** The Hybrid could still win that comparison because its
+advantage — the Lorentz-equivariant `EquiLinear` layers — is **orthogonal to the (dead)
+pair bias.** With both models' pair bias disabled, the comparison collapses to
+"equivariant features vs not," which the Hybrid wins on merit. It did **not**
+demonstrate that the Hybrid beats a *correctly implemented* ParT — we have no controlled
+run against weaver-correct ParT, and the honest expectation is that a working pair bias
+(ParT's core strength) would close or reverse the gap. **A clean Hybrid-vs-ParT claim
+would require re-running BOTH with the fixed embedding** — and the conclusion could
+change. This is exactly why the fix matters beyond speed: it can move not just absolute
+numbers but which model "wins."
 
 ---
 
