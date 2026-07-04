@@ -67,9 +67,26 @@ def count_step_flops(model, inputs, device, batch):
     return fc.get_total_flops() / batch
 
 
-def make_batch(batch, n_particles, num_mask, device):
-    """Synthetic (X, mask_idx) with no padded slots so all N particles are active
-    (the model computes over every slot regardless of padding -> upper bound)."""
+def make_batch(batch, n_particles, num_mask, device, realistic_padding=False):
+    """Synthetic (X, mask_idx).
+
+    Default (realistic_padding=False): no padded slots, all N particles active. This
+    is the dense upper bound and gives the STOCK backbone's FLOPs, which are
+    padding-independent (it fills padded pairs and runs BN+Conv over all N^2 regardless).
+
+    realistic_padding=True: per-jet valid count ~ N(40, 18) clamped to [5, N] (median ~40
+    -> ~90% padding, matching profile_backbone.py). REQUIRED to measure the RAGGED backbone's
+    true FLOPs/jet -- ragged's gathered Conv1d only counts the ~12% valid pairs, so with no
+    padding it would count all N^2 and look identical to dense."""
+    if realistic_padding:
+        g = torch.Generator(device='cpu').manual_seed(0)
+        n_valid = torch.normal(40.0, 18.0, (batch,), generator=g).round().clamp(5, n_particles).long()
+        mask = (torch.arange(n_particles)[None, :] < n_valid[:, None]).to(device)
+        x = torch.randn(batch, n_particles, 4, device=device) * mask[..., None]
+        x[..., 3] = torch.where(mask, x[..., 3].abs() + 0.5, torch.zeros_like(x[..., 3]))
+        # mask_idx must point at valid slots so the masked particle isn't already padding
+        mask_idx = torch.stack([torch.randint(0, int(nv), (num_mask,)) for nv in n_valid]).to(device)
+        return x, mask_idx
     x = torch.randn(batch, n_particles, 4, device=device)
     x[..., 3] = x[..., 3].abs() + 1.0          # energy != 0  -> nothing read as padding
     mask_idx = torch.randint(0, n_particles, (batch, num_mask), device=device)
@@ -89,6 +106,10 @@ def main():
     p.add_argument('--batch',       type=int, default=32)
     p.add_argument('--device',      default='cpu')
     p.add_argument('--json-out',    default='./experiments/phase2/flops.json')
+    p.add_argument('--realistic-padding', action='store_true',
+                   help="variable per-jet valid particles (~90%% padding); REQUIRED to measure "
+                        "a ragged backbone's true FLOPs/jet (else gathered pairs = all N^2 = dense). "
+                        "Stock backbone is padding-independent, so its numbers are unaffected.")
     args = p.parse_args()
     device = torch.device(args.device)
     torch.manual_seed(0)
@@ -105,20 +126,24 @@ def main():
         predictor_layers=jc.predictor_layers, predictor_dropout=jc.predictor_dropout,
         max_num_particles=jc.max_num_particles, ema_momentum=jc.ema_momentum_start,
         use_attention_gate=jc.use_attention_gate,
+        ragged_pair_embed=jc.ragged_pair_embed, pad_fill_zero=jc.pad_fill_zero,
     )
-    x, mask_idx = make_batch(args.batch, jc.max_num_particles, jc.num_mask, device)
+    x, mask_idx = make_batch(args.batch, jc.max_num_particles, jc.num_mask, device,
+                             realistic_padding=args.realistic_padding)
     results['jepa_pretrain'] = count_step_flops(jepa, (x, mask_idx), device, args.batch)
 
     # ---- MAE pretrain step (LorentzParT, mask=True) ----
     mc = LorentzParTConfig.from_dict(load(args.config_mae))
     mae = LorentzParT(config=mc)
-    x, mask_idx = make_batch(args.batch, mc.max_num_particles, 1, device)
+    x, mask_idx = make_batch(args.batch, mc.max_num_particles, 1, device,
+                             realistic_padding=args.realistic_padding)
     results['mae_pretrain'] = count_step_flops(mae, (x, mask_idx[:, 0]), device, args.batch)
 
     # ---- Finetune / scratch step (LorentzParT, mask=False) ----
     cc = LorentzParTConfig.from_dict(load(args.config_clf))
     clf = LorentzParT(config=cc)
-    x, _ = make_batch(args.batch, cc.max_num_particles, 1, device)
+    x, _ = make_batch(args.batch, cc.max_num_particles, 1, device,
+                      realistic_padding=args.realistic_padding)
     results['finetune'] = count_step_flops(clf, (x,), device, args.batch)
 
     print(f"\n{'step':16s}{'GFLOPs/jet (fwd+bwd)':>24s}")
