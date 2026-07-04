@@ -152,14 +152,31 @@ python experiments/phase3/plot_speedup.py --results-dir experiments/phase3/resul
 
 ---
 
-## Next steps
+## Re-profile after ragged + TF32 (`--realistic-padding`, batch 1000)
 
-1. **TF32** (change 3, above) — enable, then a quick 100k accuracy-neutral check.
-2. **Re-profile the ragged backbone** — the bottleneck moved when ragged removed ~55%; the
-   re-profile decides whether anything else is worth optimizing (likely attention / GEMM /
-   LayerNorm now).
-3. **Optional, only if step 2 justifies:** `torch.compile` + the peer's compile-patch fix, or
-   upper-triangle symmetry on the pair path. Diminishing returns — the big win is done.
-4. **Phase 3.5 — 1M re-validation** on the finalized backbone: stock vs ragged at 1M →
-   regenerate the accuracy + speedup figures and the corrected Phase 2 numbers. This decides
-   how much of Phase 2 (run on the broken, slower backbone) needs redoing.
+Total self-CUDA time **3.43s → 1.24s (~2.76×)**; BN's share **48% → 16.6%** (~8× less BN in
+absolute terms — the padding skip). TF32 confirmed live (`sm90 … tf32` / `cutlass tensorop`
+GEMM kernels). The profile is now **balanced — no dominant op:**
+
+| subsystem | self-CUDA % |
+|---|---:|
+| interaction-embed BN | 16.6 |
+| LayerNorm (fwd+bwd) | 12.1 |
+| attention (bmm+baddbmm+softmax) | ~11.5 |
+| memory copies (`copy_`, incl. ragged gather/scatter) | 10.2 |
+| dropout | 7.5 |
+| GEMMs (`mm`) | 5.8 |
+
+**Decision: stop optimizing, proceed to Phase 3.5.** No 40%-style hotspot remains — it's
+diminishing returns. Optional single win if desired: **upper-triangle symmetry** on the pair
+path (U is symmetric → process only `i<j`), which ~halves the remaining BN *and* the `copy_`
+overhead (~10% of total) at low effort and accuracy-neutral. `torch.compile` (~1.3× on the
+elementwise/LN/dropout pile) and a fused-attention kernel are higher-effort for a balanced
+profile — future work, not now.
+
+## Next step — Phase 3.5: 1M re-validation
+
+On the finalized backbone (ragged + TF32): stock vs ragged at 1M → regenerate the accuracy +
+speedup figures and the corrected Phase 2 numbers. This decides how much of Phase 2 (run on
+the broken, slower backbone) needs redoing — likely the relative rankings hold but the
+absolute numbers rise.

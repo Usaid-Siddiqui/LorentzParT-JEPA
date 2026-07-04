@@ -1,0 +1,71 @@
+# CORRECTED (Phase 3.5) — padding-aware ragged interaction embedding.
+# Identical to pretrain_jepa_biased_1m.yaml + model.ragged_pair_embed: true; TF32 is on via the
+# training scripts. Use with run_phase2.py --tag 1m_ragged.
+# JEPA pretraining (gate + biased, K=1) for the 1M-scale headline run.
+# Identical to pretrain_jepa_biased.yaml except the budget is extended for full
+# convergence: num_epochs 20->30, T_max 20->30 (cosine spans the full budget).
+# Early stopping (patience 7) cuts it if it plateaus before 30.
+
+model:
+  name: particle_jepa
+  max_num_particles: 128
+  num_particle_features: 4
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  ragged_pair_embed: true
+
+  predictor:
+    predictor_dim: 64
+    num_heads: 4
+    num_layers: 4
+    dropout: 0.1
+
+  jepa:
+    ema_momentum_start: 0.999   # was 0.996; 1M has 15x more steps, so a faster
+    ema_momentum_end: 1.0       # target let the context encoder outrun it -> divergence
+    use_attention_gate: true
+    num_mask: 1
+    mask_mode: biased
+
+train:
+  batch_size: 1000
+  criterion:
+    name: embedding_loss
+    embed_dim: 128
+  optimizer:
+    name: radam
+    lr: 0.0003   # was 0.001; too high for 1M (15x more steps) -> loss bottoms ep2 then climbs
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.000003   # scaled with lr (0.001->0.0003) so cosine bottoms proportionally
+  # Early stopping REMOVED entirely (not just high-patience). JEPA must train the
+  # full schedule: the val embedding loss bounces early but the EMA target keeps
+  # annealing toward 1.0 and the representation keeps consolidating. Two reasons a
+  # high-patience early_stopping callback is not enough:
+  #   1. patience>>epochs only prevents firing if the config ACTUALLY loads — a
+  #      stale config on the cluster silently re-enables the old low patience.
+  #   2. EarlyStopping.restore_best_weights defaults to True, so when it DOES fire
+  #      it reverts the model to the early best-val epoch BEFORE the trainer's
+  #      save-FINAL code runs — defeating the fix and saving an under-annealed
+  #      encoder (the real cause of the weak Phase 2 JEPA probe).
+  # With no callback, the post-loop save-FINAL writes the true epoch-30 encoder.
+  callbacks: []
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true
