@@ -254,7 +254,9 @@ numbers but which model "wins."
 | `profile_backbone.py` | profile LorentzParT fwd+bwd → ranked op table + `--plot-out` hotspot chart | `python experiments/phase3/profile_backbone.py --batch 1000 --iters 10 --plot-out experiments/phase3/hotspots_gpu.png` |
 | `bench_interaction.py` | A/B baseline / torch.compile / ragged on the interaction embedding (uses the production `RaggedInteractionEmbedding`) | `python experiments/phase3/bench_interaction.py --batch 1000 --plot-out experiments/phase3/interaction_bench.png` |
 | `test_ragged_gradcheck.py` | float64 gradcheck of `RaggedInteractionEmbedding` (w.r.t. input + params) | `python experiments/phase3/test_ragged_gradcheck.py` |
-| `run_ragged_e2e.py` | end-to-end 100k A/B, 3 conditions {stock, ragged, fill0}: AUC + speedup + BN-decomp readout | `python experiments/phase3/run_ragged_e2e.py --data-dir ./data --seeds 42 123 456` |
+| `run_ragged_e2e.py` | end-to-end 100k A/B, 3 conditions {stock, ragged, fill0}: AUC + speedup + BN-decomp readout; writes `results/seed_*.json` | `python experiments/phase3/run_ragged_e2e.py --data-dir ./data --seeds 42 123 456` |
+| `plot_speedup.py` | per-epoch training-time bar chart (pretrain+finetune) w/ speedup vs stock, from the seed JSONs | `python experiments/phase3/plot_speedup.py --results-dir experiments/phase3/results` |
+| (`../analyze_results.py`) | AUC / accuracy / per-class bar charts from the seed JSONs | `python experiments/analyze_results.py --results-dir experiments/phase3/results --conditions stock ragged fill0` |
 | `run_ragged_validation.py` | 1M finetune-only follow-up: AUC preservation + epoch speedup (reuses existing encoder) | `python experiments/phase3/run_ragged_validation.py --weights <encoder.pt> --data-dir ./data_1m --seeds 42 123 456` |
 | `hotspots_gpu.png` | profiling hotspot chart | — |
 

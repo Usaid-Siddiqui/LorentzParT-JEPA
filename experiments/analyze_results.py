@@ -35,6 +35,9 @@ CONDITION_LABELS = {
     'gate_random':      'Gate + Random',
     'no_gate_biased':   'No Gate + Biased',
     'gate_biased':      'Gate + Biased',
+    'stock':            'Stock (−1e9)',
+    'ragged':           'Ragged (padding-aware)',
+    'fill0':            'Fill-0 (dense BN fix)',
 }
 CONDITION_COLORS = {
     'jepa_finetune':    '#1565C0',
@@ -47,6 +50,9 @@ CONDITION_COLORS = {
     'gate_random':      '#1B5E20',
     'no_gate_biased':   '#4A148C',
     'gate_biased':      '#B71C1C',
+    'stock':            '#1f77b4',
+    'ragged':           '#ff7f0e',
+    'fill0':            '#2ca02c',
 }
 _FALLBACK_COLORS = [
     '#2196F3', '#FF9800', '#4CAF50', '#9C27B0',
