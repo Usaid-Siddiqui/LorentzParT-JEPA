@@ -60,6 +60,7 @@ class LorentzParTConfig(BaseModelConfig):
     pair_embed_dims: List[int] = field(default_factory=lambda: [64, 64, 64])
     mask_mode: str = 'random'
     ragged_pair_embed: bool = False   # padding-aware interaction embedding (Phase 3)
+    pad_fill_zero: bool = False        # fill padded pairs with 0 not -1e9 (Phase-3 BN-decomp control)
 
     @classmethod
     def from_dict(cls, d: Dict):
@@ -86,6 +87,7 @@ class JEPAConfig(BaseModelConfig):
     num_mask: int = 1
     mask_mode: str = 'random'
     ragged_pair_embed: bool = False   # padding-aware interaction embedding (Phase 3)
+    pad_fill_zero: bool = False        # fill padded pairs with 0 not -1e9 (Phase-3 BN-decomp control)
 
     @classmethod
     def from_dict(cls, d: Dict):

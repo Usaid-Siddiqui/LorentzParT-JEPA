@@ -46,10 +46,15 @@ NORM_DICT = {
 }
 NORMALIZE = [True, False, False, True]
 
-# condition -> (jepa pretrain config, finetune config). Same weights load into both.
+# condition -> (jepa pretrain config, finetune config). All differ only in the pair path:
+#   stock  = dense embedding, padded pairs -1e9 (BN-corrupted)
+#   ragged = padding-aware (skip padding) + BN over valid pairs (fast + BN fix)
+#   fill0  = dense embedding but padded pairs = 0 (BN fix WITHOUT the ragged speed) — the
+#            decomposition control: if fill0 ≈ ragged AUC, the accuracy gain is purely the BN fix.
 CONDITIONS = {
     'stock':  ('./configs/pretrain_jepa.yaml',        './configs/train_lorentz_part.yaml'),
     'ragged': ('./configs/pretrain_jepa_ragged.yaml', './configs/train_lorentz_part_ragged.yaml'),
+    'fill0':  ('./configs/pretrain_jepa_fill0.yaml',  './configs/train_lorentz_part_fill0.yaml'),
 }
 
 
@@ -152,20 +157,27 @@ def main():
         v = [r[i] for r in rows if r[0] == cond and r[i] is not None]
         return (statistics.mean(v), statistics.pstdev(v)) if v else (float('nan'), 0.0)
 
-    (sa, ss), (ra, rs) = agg('stock', 3), agg('ragged', 3)
-    spe, rpe = agg('stock', 4)[0], agg('ragged', 4)[0]      # pretrain median epoch
-    sfe, rfe = agg('stock', 5)[0], agg('ragged', 5)[0]      # finetune median epoch
-    d = ra - sa
-    within = abs(d) <= (ss + rs)
-    print(f"\nstock  AUC {sa:.4f} ± {ss:.4f}")
-    print(f"ragged AUC {ra:.4f} ± {rs:.4f}   Δ {d:+.4f}  -> {'WITHIN' if within else 'OUTSIDE'} seed variance")
-    if spe and rpe:
-        print(f"pretrain median epoch: stock {spe:.1f}s -> ragged {rpe:.1f}s   ({spe / rpe:.2f}x)")
-    if sfe and rfe:
-        print(f"finetune median epoch: stock {sfe:.1f}s -> ragged {rfe:.1f}s   ({sfe / rfe:.2f}x)")
-    print(f"\nVERDICT: ragged {'PRESERVES' if within else 'CHANGES'} AUC"
-          + (f"; pretrain {spe / rpe:.2f}x, finetune {sfe / rfe:.2f}x faster/epoch"
-             if spe and rpe and sfe and rfe else ""))
+    sa, ss = agg('stock', 3)                                 # stock is the reference
+    spe, sfe = agg('stock', 4)[0], agg('stock', 5)[0]        # stock median epoch (pre, ft)
+    print(f"\nstock  AUC {sa:.4f} ± {ss:.4f}   (reference)")
+    for cond in [c for c in CONDITIONS if c != 'stock' and any(r[0] == c for r in rows)]:
+        ca, cs = agg(cond, 3)
+        d = ca - sa
+        within = abs(d) <= (ss + cs)
+        cpe, cfe = agg(cond, 4)[0], agg(cond, 5)[0]
+        sp = (f"  ({spe / cpe:.2f}x pre, {sfe / cfe:.2f}x ft)" if spe and cpe and sfe and cfe else "")
+        print(f"{cond:6s} AUC {ca:.4f} ± {cs:.4f}   Δ {d:+.4f} vs stock  [{'WITHIN' if within else 'OUTSIDE'} var]{sp}")
+
+    # decomposition: how much of ragged's gain does the dense BN-fix (fill0) recover?
+    ra = agg('ragged', 3)[0] if any(r[0] == 'ragged' for r in rows) else None
+    fa = agg('fill0', 3)[0] if any(r[0] == 'fill0' for r in rows) else None
+    if ra is not None and fa is not None and abs(ra - sa) > 1e-6:
+        recov = (fa - sa) / (ra - sa)
+        verdict = ('the BN-corruption fix (ragged speed is orthogonal)' if recov > 0.8
+                   else 'partly the BN fix, partly the ragged reorg' if recov > 0.3
+                   else 'NOT mainly the BN fill — investigate')
+        print(f"\nDECOMP: dense fill0 recovers {recov * 100:.0f}% of ragged's +{ra - sa:.3f} AUC gain "
+              f"-> the accuracy win is {verdict}")
 
 
 if __name__ == '__main__':

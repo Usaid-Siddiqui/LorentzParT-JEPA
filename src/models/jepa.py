@@ -93,6 +93,7 @@ class ParticleJEPA(nn.Module):
         ema_momentum: float = 0.996,
         use_attention_gate: bool = True,
         ragged_pair_embed: bool = False,
+        pad_fill_zero: bool = False,
     ):
         super().__init__()
 
@@ -103,7 +104,7 @@ class ParticleJEPA(nn.Module):
         self.use_attention_gate = use_attention_gate
 
         # Shared processor: computes multivectors + pairwise interaction features
-        self.processor = ParticleProcessor(to_multivector=True)
+        self.processor = ParticleProcessor(to_multivector=True, pad_fill=0.0 if pad_fill_zero else -1e9)
 
         # Context encoder (trainable)
         self.context_encoder = LorentzParTEncoder(

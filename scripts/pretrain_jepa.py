@@ -107,6 +107,7 @@ def main(rank, world_size, seed, config_path, data_dir, checkpoint_path=None, ru
         ema_momentum=model_cfg.ema_momentum_start,
         use_attention_gate=model_cfg.use_attention_gate,
         ragged_pair_embed=model_cfg.ragged_pair_embed,
+        pad_fill_zero=model_cfg.pad_fill_zero,
     ).to(device)
 
     # Trainer

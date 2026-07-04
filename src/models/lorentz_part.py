@@ -188,6 +188,7 @@ class LorentzParT(nn.Module):
             self.weights = weights if weights is not None else config.weights
             self.inference = inference if inference is not None else config.inference
             self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else getattr(config, 'ragged_pair_embed', False)
+            self.pad_fill_zero = getattr(config, 'pad_fill_zero', False)
         else:
             self.max_num_particles = max_num_particles if max_num_particles is not None else 128
             self.num_particle_features = num_particle_features if num_particle_features is not None else 4
@@ -213,12 +214,13 @@ class LorentzParT(nn.Module):
             self.weights = weights if weights is not None else None
             self.inference = inference if inference is not None else False
             self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else False
+            self.pad_fill_zero = False
 
         # Initialize the class token
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim), requires_grad=True)
         nn.init.normal_(self.cls_token, mean=0.0, std=1.0)
 
-        self.processor = ParticleProcessor(to_multivector=True)
+        self.processor = ParticleProcessor(to_multivector=True, pad_fill=0.0 if self.pad_fill_zero else -1e9)
         self.encoder = LorentzParTEncoder(
             embed_dim=self.embed_dim,
             num_heads=self.num_heads,

@@ -5,9 +5,10 @@ from lgatr.interface import embed_vector
 
 
 class ParticleProcessor(nn.Module):
-    def __init__(self, to_multivector: bool = False):
+    def __init__(self, to_multivector: bool = False, pad_fill: float = -1e9):
         super(ParticleProcessor, self).__init__()
         self.to_multivector = to_multivector
+        self.pad_fill = pad_fill   # padded-pair fill in U; -1e9 corrupts BN stats (Phase-3 decomp uses 0.0)
 
     def _get_interaction(self, x: Tensor) -> Tensor:
         # Identify the padding particles (assume padding particles have zero energy)
@@ -66,8 +67,8 @@ class ParticleProcessor(nn.Module):
         # Combine the features into a single tensor
         U_vals = torch.stack((ln_delta, ln_kT, ln_z, ln_m2), dim=-1)  # (B, N, N, 4)
 
-        # Initialize U with large negative values
-        U = torch.full_like(U_vals, fill_value=-1e9)
+        # Initialize U with the padding fill value (-1e9 by default; 0.0 avoids BN-stat corruption)
+        U = torch.full_like(U_vals, fill_value=self.pad_fill)
 
         # Determine valid pairs (both particles are not padding)
         valid_pairs = mask.unsqueeze(2) & mask.unsqueeze(1)
