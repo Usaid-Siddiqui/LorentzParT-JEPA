@@ -22,9 +22,10 @@ Two cost axes (--cost-axis):
                        measure_flops.py) x N_train x epochs. Immune to cluster
                        jitter; the recommended headline. Reads flops.json.
 
---jepa-encoder final (default) charges JEPA the full pretrain; --jepa-encoder
-best uses the best-val encoder (pretrain charged only to the val-loss minimum +
---jepa-patience epochs, finetune = *_bestft_*).
+--jepa-encoder best (DEFAULT) uses the best-val encoder (pretrain charged only to
+the val-loss minimum + --jepa-patience epochs, finetune = *_bestft_*) — Phase 2
+showed it is non-inferior on AUC and ~1/3 the pretrain compute. --jepa-encoder
+final charges JEPA the full pretrain (kept for the best-vs-final comparison only).
 
     # deterministic compute axis, best-val JEPA encoder (recommended):
     python experiments/phase2/measure_flops.py --json-out experiments/phase2/flops.json
@@ -165,10 +166,12 @@ def main():
     p.add_argument('--seeds',       nargs='+', type=int, default=[42, 123, 456])
     p.add_argument('--tag',         default='1m')
     p.add_argument('--output-dir',  default=None, help='defaults to --results-dir')
-    p.add_argument('--jepa-encoder', choices=['final', 'best'], default='final',
-                   help="'final': full-schedule encoder (pretrain = full run). "
-                        "'best': best-val encoder (pretrain charged only to the val-loss "
-                        "minimum + patience) — ~equal accuracy, far cheaper.")
+    p.add_argument('--jepa-encoder', choices=['final', 'best'], default='best',
+                   help="DEFAULT 'best': best-val encoder (pretrain charged only to the "
+                        "val-loss minimum + patience) — Phase 2 showed it is non-inferior on "
+                        "AUC (0.9339 vs 0.9336) AND ~1/3 the pretrain compute (~9 vs 30 ep). "
+                        "Requires the *_bestft_* finetune CSVs + diag_bestft AUC JSONs. "
+                        "'final': full-schedule encoder (pretrain = full run) — comparison only.")
     p.add_argument('--jepa-pretrain-dir', default='./logs/ParticleJEPA/logging',
                    help="JEPA pretrain CSVs (to time/epoch the best-val stop).")
     p.add_argument('--jepa-patience', type=int, default=5,
