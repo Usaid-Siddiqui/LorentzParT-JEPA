@@ -1,0 +1,57 @@
+# K=4 CHECK — identical to pretrain_jepa_biased_1m_ragged.yaml except num_mask: 1 -> 4.
+# One-off probe of a harder pretext task (4 masked particles/jet) at 1M scale on the
+# corrected (ragged) backbone. Everything else — tuned lr/ema/schedule, gate, biased
+# masking, ragged interaction embedding — is unchanged. TF32 is on via the training scripts.
+
+model:
+  name: particle_jepa
+  max_num_particles: 128
+  num_particle_features: 4
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  ragged_pair_embed: true
+
+  predictor:
+    predictor_dim: 64
+    num_heads: 4
+    num_layers: 4
+    dropout: 0.1
+
+  jepa:
+    ema_momentum_start: 0.999   # was 0.996; 1M has 15x more steps, so a faster
+    ema_momentum_end: 1.0       # target let the context encoder outrun it -> divergence
+    use_attention_gate: true
+    num_mask: 4                 # K=4 (this file's only change vs the K=1 1M ragged config)
+    mask_mode: biased
+
+train:
+  batch_size: 1000
+  criterion:
+    name: embedding_loss
+    embed_dim: 128
+  optimizer:
+    name: radam
+    lr: 0.0003   # was 0.001; too high for 1M (15x more steps) -> loss bottoms ep2 then climbs
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.000003   # scaled with lr (0.001->0.0003) so cosine bottoms proportionally
+  callbacks: []         # no early stopping — JEPA must train the full schedule (see K=1 config notes)
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true
