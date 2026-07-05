@@ -17,6 +17,11 @@ run you can't babysit:
 Output JSONs use the SAME condition keys as Phase 0 (jepa_finetune / mae_finetune /
 scratch / jepa_probe / mae_probe) so analyze_results.py works unchanged.
 
+The JEPA encoder is evaluated (finetune + probe + embedding stats) from its BEST-VAL
+checkpoint (`..._best.pt`) by default — Phase 2 showed best-val is non-inferior on AUC to
+the final-epoch encoder AND ~1/3 the pretrain compute. The JEPA finetune is named
+`jepa_{tag}_bestft_seed{N}` so `plot_walltime --jepa-encoder best` (its default) reads it.
+
     python experiments/phase2/run_phase2.py \\
         --data-dir ./data_1m \\
         --pretrain-config configs/pretrain_jepa_biased_1m.yaml \\
@@ -79,14 +84,19 @@ def safe_stage(cmd, env, desc):
 def run_seed(seed, args, python, env, device):
     tag = args.tag
     # tagged checkpoint paths (distinct from 100k Phase 0)
-    jepa_ckpt = f'./logs/ParticleJEPA/best/jepa_{tag}_seed{seed}.pt'
+    # JEPA is evaluated on the BEST-VAL encoder by default (Phase 2: non-inferior AUC to
+    # the final encoder AND ~1/3 the pretrain compute). jepa_trainer OVERWRITES the rolling
+    # best/ path with the final-epoch encoder, but preserves the best-val one as `..._best.pt`
+    # — so we finetune/probe from `jepa_best` and keep `jepa_ckpt` only as the pretrain-done flag.
+    jepa_ckpt = f'./logs/ParticleJEPA/best/jepa_{tag}_seed{seed}.pt'          # final-epoch (pretrain-complete signal)
+    jepa_best = f'./logs/ParticleJEPA/best/jepa_{tag}_seed{seed}_best.pt'     # best-val encoder (what we evaluate)
     mae_ckpt  = f'./logs/LorentzParT/best/mae_{tag}_seed{seed}.pt'
-    jepa_ft   = f'./logs/LorentzParT/best/jepa_{tag}_ft_seed{seed}.pt'
+    jepa_ft   = f'./logs/LorentzParT/best/jepa_{tag}_bestft_seed{seed}.pt'
     mae_ft    = f'./logs/LorentzParT/best/mae_{tag}_ft_seed{seed}.pt'
     scratch   = f'./logs/LorentzParT/best/scratch_{tag}_seed{seed}.pt'
     jepa_pt_csv = f'./logs/ParticleJEPA/logging/jepa_{tag}_seed{seed}.csv'
     mae_pt_csv  = f'./logs/LorentzParT/logging/mae_{tag}_seed{seed}.csv'
-    jepa_ft_csv = f'./logs/LorentzParT/logging/jepa_{tag}_ft_seed{seed}.csv'
+    jepa_ft_csv = f'./logs/LorentzParT/logging/jepa_{tag}_bestft_seed{seed}.csv'
     mae_ft_csv  = f'./logs/LorentzParT/logging/mae_{tag}_ft_seed{seed}.csv'
     scratch_csv = f'./logs/LorentzParT/logging/scratch_{tag}_seed{seed}.csv'
     probe_jepa_json = os.path.join(args.output_dir, f'probe_jepa_{tag}_seed{seed}.json')
@@ -112,9 +122,9 @@ def run_seed(seed, args, python, env, device):
 
     # ── Fine-tuning (skip if done; skip pretrained variants if encoder missing) ──
     for run_name, weights, ft_ckpt in [
-        (f'jepa_{tag}_ft_seed{seed}',   jepa_ckpt, jepa_ft),
-        (f'mae_{tag}_ft_seed{seed}',    mae_ckpt,  mae_ft),
-        (f'scratch_{tag}_seed{seed}',   None,      scratch),
+        (f'jepa_{tag}_bestft_seed{seed}', jepa_best, jepa_ft),   # best-val encoder (not final)
+        (f'mae_{tag}_ft_seed{seed}',      mae_ckpt,  mae_ft),
+        (f'scratch_{tag}_seed{seed}',     None,      scratch),
     ]:
         if done(ft_ckpt, f'finetune {run_name}'):
             continue
@@ -130,7 +140,7 @@ def run_seed(seed, args, python, env, device):
     # ── Linear probing ──────────────────────────────────────────────────────────
     if not args.skip_probe:
         for probe_name, ckpt, pj in [
-            (f'probe_jepa_{tag}_seed{seed}', jepa_ckpt, probe_jepa_json),
+            (f'probe_jepa_{tag}_seed{seed}', jepa_best, probe_jepa_json),   # best-val encoder
             (f'probe_mae_{tag}_seed{seed}',  mae_ckpt,  probe_mae_json),
         ]:
             if done(pj, f'probe {probe_name}'):
@@ -153,7 +163,7 @@ def run_seed(seed, args, python, env, device):
         except Exception as e:                              # noqa: BLE001 — never let stats kill the run
             print(f"[warn] embedding stats failed for {ckpt}: {e}", flush=True)
             return {}
-    jepa_embed = embed(jepa_ckpt)
+    jepa_embed = embed(jepa_best)          # best-val encoder (consistent with finetune/probe)
     mae_embed  = embed(mae_ckpt)
 
     # ── Test-set eval (guarded) → Phase-0-compatible condition keys ─────────────
