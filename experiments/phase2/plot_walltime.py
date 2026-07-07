@@ -27,6 +27,12 @@ the val-loss minimum + --jepa-patience epochs, finetune = *_bestft_*) — Phase 
 showed it is non-inferior on AUC and ~1/3 the pretrain compute. --jepa-encoder
 final charges JEPA the full pretrain (kept for the best-vs-final comparison only).
 
+--finetune-charge target (DEFAULT) charges each method the compute to first reach a
+fixed val accuracy (auto = Scratch's mean peak), the honest per-task cost for a
+head-start/amortization claim. The legacy 'earlystop' charge (last epoch = best-val +
+patience) is biased AGAINST the pretrained methods — they plateau higher and stop
+later, so it overcharges them and hides the head-start. Do not headline 'earlystop'.
+
     # deterministic compute axis, best-val JEPA encoder (recommended):
     python experiments/phase2/measure_flops.py --json-out experiments/phase2/flops.json
     python experiments/phase2/plot_walltime.py --tag 1m --seeds 42 123 456 \\
@@ -159,6 +165,23 @@ def mean_curve(seed_curves, x_end=None, n=200):
     return grid, ys.mean(axis=0)
 
 
+def ft_charge_index(vm, mode, target):
+    """Index into a finetune val-metric curve at which to charge its compute cost.
+
+    'earlystop' (legacy): last epoch (best-val + patience) — biased AGAINST the pretrained
+    methods, which plateau at higher accuracy and so early-stop later, overcharging them even
+    though they reached every accuracy sooner. 'bestval': the deployed (best val-metric) epoch.
+    'target': first epoch to reach `target` val-metric — the honest 'compute to reach a fixed
+    performance' for a head-start / amortization claim."""
+    n = len(vm)
+    if n == 0 or mode == 'earlystop':
+        return n - 1
+    if mode == 'bestval':
+        return int(np.argmax(vm))
+    hits = np.where(vm >= target)[0] if target is not None else np.array([], dtype=int)
+    return int(hits[0]) if hits.size else n - 1
+
+
 def main():
     p = argparse.ArgumentParser(description="Phase 2 cost-vs-accuracy figures")
     p.add_argument('--results-dir', default='./experiments/phase2/results')
@@ -188,6 +211,14 @@ def main():
                    help="training jets per epoch (for --cost-axis flops).")
     p.add_argument('--mae-pretrain-dir', default='./logs/LorentzParT/logging',
                    help="MAE pretrain CSVs (to count MAE pretrain epochs for the FLOPs offset).")
+    p.add_argument('--finetune-charge', choices=['target', 'bestval', 'earlystop'], default='target',
+                   help="how much finetune compute to charge each method. 'target' (DEFAULT): "
+                        "compute to first reach --target-acc (auto = Scratch's mean peak) — the honest "
+                        "'compute to match the from-scratch baseline'. 'bestval': to each method's own "
+                        "best-val epoch (the deployed model). 'earlystop': legacy last epoch "
+                        "(best-val+patience) — biased against the pretrained methods, do not headline.")
+    p.add_argument('--target-acc', type=float, default=None,
+                   help="val-accuracy bar for --finetune-charge target; default auto = Scratch mean peak.")
     args = p.parse_args()
     out = args.output_dir or args.results_dir
     os.makedirs(out, exist_ok=True)
@@ -207,6 +238,24 @@ def main():
         jpre_pe = fp['jepa_pretrain'] * args.n_train / PFLOP
         mpre_pe = fp['mae_pretrain']  * args.n_train / PFLOP
     unit = 'PFLOPs' if flops_axis else 'hours'
+
+    # finetune-charge 'target': default the bar to Scratch's mean peak val-acc, i.e. charge
+    # every method the compute to "match the from-scratch baseline". This is the honest per-task
+    # finetune cost — the legacy early-stop epoch overcharges the pretrained methods (they plateau
+    # higher and stop later), which hides the head-start.
+    target = args.target_acc
+    if args.finetune_charge == 'target' and target is None:
+        pk = []
+        for s in args.seeds:
+            cp = os.path.join(args.logs_dir, f'scratch_{args.tag}_seed{s}.csv')
+            if os.path.exists(cp):
+                v, _, _ = read_ft_csv(cp)
+                if v.size:
+                    pk.append(float(v.max()))
+        target = float(np.mean(pk)) if pk else None
+        print(f"[finetune-charge=target] bar = {target:.4f} val_acc (Scratch mean peak)"
+              if target is not None else
+              "[finetune-charge=target] no Scratch CSVs found -> charging last epoch")
 
     agg = {m[0]: {'pre': [], 'ft': [], 'auc': []} for m in METHODS}   # values already in `unit`
     ft_curves    = defaultdict(list)   # label -> [(finetune_cost, val_metric), ...]
@@ -259,12 +308,13 @@ def main():
                 else:
                     pre = (c.get('pretrain_time_s') or 0.0) / 3600.0
 
+            idx = ft_charge_index(vm, args.finetune_charge, target)   # epoch we charge/plot to
             agg[label]['pre'].append(pre)
-            agg[label]['ft'].append(ft_x[-1])
+            agg[label]['ft'].append(ft_x[idx])
             if auc is not None:
                 agg[label]['auc'].append(auc)
-            ft_curves[label].append((ft_x, vm))
-            total_curves[label].append((ft_x + pre, vm))
+            ft_curves[label].append((ft_x[:idx + 1], vm[:idx + 1]))
+            total_curves[label].append((ft_x[:idx + 1] + pre, vm[:idx + 1]))
 
     labels = [m[0] for m in METHODS]
     colors = {m[0]: m[3] for m in METHODS}
@@ -315,7 +365,10 @@ def main():
 
     # ---- table ----
     u = unit[:8]
-    print(f"\n{'method':16s}{'pretrain_' + u:>16s}{'finetune_' + u:>16s}{'total_' + u:>14s}{'auc':>9s}")
+    charge_note = args.finetune_charge + (f' @ {target:.4f} val_acc'
+                                          if args.finetune_charge == 'target' and target else '')
+    print(f"\n[finetune charged at: {charge_note}]")
+    print(f"{'method':16s}{'pretrain_' + u:>16s}{'finetune_' + u:>16s}{'total_' + u:>14s}{'auc':>9s}")
     for l in labels:
         print(f"{l:16s}{pre_c[l]:16.2f}{ft_c[l]:16.2f}{pre_c[l] + ft_c[l]:14.2f}{auc[l]:9.4f}")
 
