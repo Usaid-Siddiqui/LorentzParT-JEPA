@@ -116,7 +116,7 @@ def bar_panel(ax, labels, triples, title, colors):
 def main():
     args = parse_args()
     d, ks, m = args.results_dir, args.ks, args.metric
-    fig, axes = plt.subplots(2, 4, figsize=(19, 9))
+    fig, axes = plt.subplots(3, 4, figsize=(19, 13))
     ax = axes.ravel()
     scratch = pool(d, ['scratch'], m)
     s0 = scratch[0] if scratch else None
@@ -168,6 +168,22 @@ def main():
               [scratch, pool(d, ['mae_random'], m),
                pool(d, [jname('on', 'random', 1)], m), pool(d, ['jepa_curriculum'], m)],
               'Objectives (pretrain recipe)', ['#616161', '#42A5F5', '#1B5E20', '#6A1B9A'])
+
+    # 9. Masking vs no masking @ K=1 (biased/random pooled over gate, vs scratch)
+    bar_panel(ax[8], ['biased', 'random', 'scratch\n(no mask)'],
+              [pool(d, [jname('on', 'biased', 1), jname('off', 'biased', 1)], m),
+               pool(d, [jname('on', 'random', 1), jname('off', 'random', 1)], m),
+               scratch],
+              'Masking vs no masking @ K=1', ['#1B5E20', '#B71C1C', '#616161'])
+
+    # 10. Gating vs no gating @ K=1 (pooled over masking)
+    bar_panel(ax[9], ['gate-on', 'gate-off'],
+              [pool(d, [jname('on', 'biased', 1), jname('on', 'random', 1)], m),
+               pool(d, [jname('off', 'biased', 1), jname('off', 'random', 1)], m)],
+              'Gating vs no gating @ K=1', ['#0D47A1', '#F9A825'])
+
+    for a in ax[10:]:            # blank the unused slots
+        a.axis('off')
 
     fig.suptitle(f'JEPA ablation on ragged backbone ({m}, ±1σ over seeds) — '
                  f'note the whole grid spans <0.005 AUC (within noise)', y=1.01, fontsize=12)
