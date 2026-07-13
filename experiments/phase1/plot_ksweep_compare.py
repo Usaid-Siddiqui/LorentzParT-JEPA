@@ -23,11 +23,20 @@ import numpy as np
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Biased vs random AUC-vs-K overlay")
+    p = argparse.ArgumentParser(description="AUC-vs-K overlay for the masking sweep")
+    # Unified single-dir mode (run_ablation_ragged): one dir, names jepa_gate{on,off}_{mask}_k{K}
+    p.add_argument('--results-dir', default=None,
+                   help="unified mode: one dir with jepa_gate{on,off}_{mask}_k{K} + mae_*/scratch/"
+                        "jepa_curriculum conditions. Plots all 4 gate×mask series + reference lines.")
+    p.add_argument('--ks', nargs='+', type=int, default=[1, 2, 4, 8],
+                   help="K values to plot in unified mode")
+    # Legacy 3-dir mode (old fragmented Phase-1 layout)
     p.add_argument('--twobytwo-dir', default='./experiments/phase1/results')
     p.add_argument('--biased-dir',   default='./experiments/phase1/results_ksweep')
     p.add_argument('--random-dir',   default='./experiments/phase1/results_ksweep_random')
-    p.add_argument('--output',       default='./experiments/phase1/ksweep_biased_vs_random.png')
+    p.add_argument('--output',       default=None,
+                   help="defaults to <results-dir>/ksweep_grid.png (unified) or "
+                        "experiments/phase1/ksweep_biased_vs_random.png (legacy)")
     return p.parse_args()
 
 
@@ -58,12 +67,68 @@ def curve(args, masking):
     return Ks, means, stds
 
 
-def main():
-    args = parse_args()
+def curve_unified(results_dir, gate, mask, ks):
+    """(Ks, means, stds) for one gate×mask series from the unified results dir."""
+    Ks, means, stds = [], [], []
+    for k in ks:
+        r = auc(results_dir, f'jepa_gate{gate}_{mask}_k{k}')
+        if r is not None:
+            Ks.append(k); means.append(r[0]); stds.append(r[1])
+    return Ks, means, stds
+
+
+def _finish_axes(ax, ks):
+    ax.set_xscale('log', base=2)
+    ax.set_xticks(ks)
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.set_xlabel('K  (particles masked per jet)')
+    ax.set_ylabel('OVO ROC AUC')
+    ax.grid(alpha=0.3)
+
+
+def plot_unified(args):
+    """All four gate×mask AUC-vs-K series from one dir + MAE/scratch/curriculum reference lines."""
+    fig, ax = plt.subplots(figsize=(9, 6))
+    series = [('on',  'biased', '#1B5E20', 'o', 'gate-on · biased'),
+              ('on',  'random', '#B71C1C', 's', 'gate-on · random'),
+              ('off', 'biased', '#66BB6A', '^', 'gate-off · biased'),
+              ('off', 'random', '#EF9A9A', 'D', 'gate-off · random')]
+    for gate, mask, color, marker, label in series:
+        Ks, means, stds = curve_unified(args.results_dir, gate, mask, args.ks)
+        if not Ks:
+            print(f"[skip] no data for gate-{gate} {mask}")
+            continue
+        ax.errorbar(Ks, means, yerr=stds, marker=marker, markersize=7, capsize=4,
+                    linewidth=2, color=color, label=label, markeredgecolor='black')
+        print(f"gate-{gate:3s} {mask:6s}: " + "  ".join(f"K{k}={m:.4f}" for k, m in zip(Ks, means)))
+
+    # horizontal reference lines for conditions that have no single K
+    refs = [('scratch',         '#616161', ':',  'scratch'),
+            ('mae_biased',      '#1565C0', '--', 'MAE biased'),
+            ('mae_random',      '#42A5F5', '--', 'MAE random'),
+            ('jepa_curriculum', '#6A1B9A', '-.', 'curriculum')]
+    for cond, color, ls, label in refs:
+        r = auc(args.results_dir, cond)
+        if r is None:
+            continue
+        ax.axhline(r[0], color=color, ls=ls, lw=1.3, alpha=0.85)
+        ax.annotate(f'{label} {r[0]:.3f}', (max(args.ks), r[0]), textcoords='offset points',
+                    xytext=(6, 0), va='center', fontsize=7.5, color=color)
+        print(f"{label:12s}: {r[0]:.4f}  (n={r[2]})")
+
+    _finish_axes(ax, args.ks)
+    ax.set_title('Masking-count sweep (ragged backbone) · gate × mask × K')
+    ax.legend(fontsize=9, loc='best')
+    ax.margins(x=0.14)
+    out = args.output or os.path.join(args.results_dir, 'ksweep_grid.png')
+    fig.tight_layout(); plt.savefig(out, dpi=300); plt.close()
+    print(f"\nSaved → {out}")
+
+
+def plot_legacy(args):
     fig, ax = plt.subplots(figsize=(8, 5.5))
     styles = {'biased': ('#1B5E20', 'o', 'biased masking'),
               'random': ('#B71C1C', 's', 'random masking')}
-
     for masking, (color, marker, label) in styles.items():
         Ks, means, stds = curve(args, masking)
         if not Ks:
@@ -75,19 +140,20 @@ def main():
             ax.annotate(f'{m:.3f}', (k, m), textcoords='offset points', xytext=(0, 9),
                         ha='center', fontsize=8, color=color)
         print(f"{masking:7s}: " + "  ".join(f"K{k}={m:.4f}" for k, m in zip(Ks, means)))
-
-    ax.set_xscale('log', base=2)
-    ax.set_xticks([1, 2, 4, 8, 16])
-    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax.set_xlabel('K  (particles masked per jet)')
-    ax.set_ylabel('OVO ROC AUC')
+    _finish_axes(ax, [1, 2, 4, 8, 16])
     ax.set_title('Masking-count sweep: biased vs random  (gate on)')
     ax.legend(fontsize=10)
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
-    plt.savefig(args.output, dpi=300)
-    plt.close()
-    print(f"\nSaved → {args.output}")
+    out = args.output or './experiments/phase1/ksweep_biased_vs_random.png'
+    fig.tight_layout(); plt.savefig(out, dpi=300); plt.close()
+    print(f"\nSaved → {out}")
+
+
+def main():
+    args = parse_args()
+    if args.results_dir:
+        plot_unified(args)
+    else:
+        plot_legacy(args)
 
 
 if __name__ == '__main__':
