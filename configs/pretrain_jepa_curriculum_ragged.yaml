@@ -50,7 +50,8 @@ train:
     eta_min: 0.00001
   callbacks:
     - name: mask_curriculum
-      schedule: [[0, 1], [5, 2], [10, 4], [15, 8]]   # train num_mask ramp (val stays 8)
+      kwargs:                                          # get_callbacks_from_config reads params from 'kwargs:'
+        schedule: [[0, 1], [5, 2], [10, 4], [15, 8]]   # train num_mask ramp (val stays 8)
   num_epochs: 20
   start_epoch: 0
   logging_dir: ./logs
