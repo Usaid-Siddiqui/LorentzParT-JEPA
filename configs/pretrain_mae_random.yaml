@@ -1,0 +1,55 @@
+# Stock (broken, -1e9) MAE with RANDOM masking — for the reconstruction-bias diagnostic.
+# Identical to pretrain_mae.yaml except mask_mode: random. Pairs with pretrain_mae.yaml
+# (stock + biased) as the two "broken backbone" points in recon_bias_diagnostic.py; the
+# ragged (fixed) points come from the ablation's generated mae_{biased,random} configs.
+
+model:
+  name: lorentz_part
+  max_num_particles: 128
+  num_particle_features: 4
+  num_classes: 10
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  num_cls_layers: 2
+  num_mlp_layers: 0
+  hidden_dim: 256
+  hidden_mv_channels: 8
+  in_s_channels: null
+  out_s_channels: null
+  hidden_s_channels: 16
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  mask: true
+  mask_mode: random
+  weights: null
+
+train:
+  batch_size: 1000
+  criterion:
+    name: conservation_loss
+  optimizer:
+    name: radam
+    lr: 0.001
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: exponential_lr
+    gamma: 0.736
+  callbacks:
+    - name: early_stopping
+      patience: 7
+      min_delta: 0.0001
+  num_epochs: 20
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: true
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true
