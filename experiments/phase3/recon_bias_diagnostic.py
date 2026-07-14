@@ -63,6 +63,9 @@ def parse_args():
     p.add_argument('--features', nargs='+', default=['pt', 'eta'], choices=list(FEATURES),
                    help="which features to plot as columns (default: pt eta — the balancing pair)")
     p.add_argument('--max-jets', type=int, default=50000, help="cap for speed")
+    p.add_argument('--clip', type=float, default=100.0,
+                   help="percentile bound for the axis range. 100 = Thanh's exact raw min/max "
+                        "(heavy-tailed scaled pT becomes unreadable); ~99 makes the bulk visible.")
     p.add_argument('--out', default='experiments/phase3/recon_bias.png')
     p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     return p.parse_args()
@@ -97,21 +100,33 @@ def collect(cfg_path, weights, data_dir, mask_mode, device, max_jets):
     return np.concatenate(preds), np.concatenate(trues), (len(missing), len(unexpected))
 
 
-def hist2d_cell(ax, true, pred, label):
-    """Identical to Thanh's cell (viz.py::plot_particle_reconstruction): hist2d(true, pred)
-    over the raw data range, gist_heat_r, solid blue y=x diagonal, per-cell colorbar.
-    Returns (σ_pred/σ_true, mean(pred)-mean(true), mesh) — the numbers go to the console, not
-    the plot, so the figure stays pixel-faithful to his."""
-    lo = min(float(true.min()), float(pred.min()))
-    hi = max(float(true.max()), float(pred.max()))
-    _, _, _, mesh = ax.hist2d(true, pred, bins=50, cmap='gist_heat_r')
+def _spearman(a, b):
+    """Rank correlation — outlier-robust 'does pred track true'."""
+    return float(np.corrcoef(np.argsort(np.argsort(a)), np.argsort(np.argsort(b)))[0, 1])
+
+
+def hist2d_cell(ax, true, pred, label, clip):
+    """Thanh's cell (viz.py): hist2d(true, pred), gist_heat_r, solid blue y=x diagonal,
+    per-cell colorbar. clip=100 is his exact raw min/max range; clip<100 percentile-bounds
+    the (square) axes so heavy-tailed features stay readable. Returns robust + non-robust
+    collapse metrics (console only, so the figure stays faithful) and the mesh."""
+    both = np.concatenate([true, pred])
+    lo, hi = (float(both.min()), float(both.max())) if clip >= 100 else \
+             tuple(np.percentile(both, [100 - clip, clip]))
+    _, _, _, mesh = ax.hist2d(true, pred, bins=50, range=[[lo, hi], [lo, hi]], cmap='gist_heat_r')
     ax.plot([lo, hi], [lo, hi], color='blue', linestyle='-')
     ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
     ax.set_xlabel(f'true {label}'); ax.set_ylabel(f'predicted {label}')
     ax.set_title(f'{label} distribution')
-    sr = np.std(pred) / (np.std(true) + 1e-9)                  # spread ratio (1 = matches true spread)
-    corr = float(np.corrcoef(true, pred)[0, 1])                # does pred track true? (1 = on diagonal)
-    return sr, float(pred.mean() - true.mean()), corr, mesh
+    qt = np.percentile(true, [25, 75]); qp = np.percentile(pred, [25, 75])
+    metrics = {
+        'iqr': (qp[1] - qp[0]) / (qt[1] - qt[0] + 1e-9),        # robust spread ratio (bulk collapse)
+        'rho': _spearman(true, pred),                          # robust tracking (Spearman)
+        'sr':  np.std(pred) / (np.std(true) + 1e-9),           # std ratio (outlier-sensitive)
+        'r':   float(np.corrcoef(true, pred)[0, 1]),           # Pearson (outlier-sensitive)
+        'dmu': float(pred.mean() - true.mean()),
+    }
+    return metrics, mesh
 
 
 def main():
@@ -130,18 +145,20 @@ def main():
     nrow, ncol = len(specs), len(feats)
     fig, axes = plt.subplots(nrow, ncol, figsize=(4.8 * ncol, 3.9 * nrow), squeeze=False)
 
-    print(f"\n{'condition':16s} " + "  ".join(f'{lbl:>16s}' for _, lbl in feats))
+    print("\nrobust (IQRr, ρ) = bulk collapse/tracking; non-robust (σr, r) = outlier-sensitive")
     for i, (label, *_ ) in enumerate(specs):
         pred, true = data[label]
         cells = []
         for j, (idx, flabel) in enumerate(feats):
-            sr, dmu, corr, mesh = hist2d_cell(axes[i][j], true[:, idx], pred[:, idx], flabel)
+            m, mesh = hist2d_cell(axes[i][j], true[:, idx], pred[:, idx], flabel, args.clip)
             fig.colorbar(mesh, ax=axes[i][j])
-            cells.append((flabel, sr, dmu, corr))
+            cells.append((flabel, m))
         # condition label on the row margin — leaves the cell (his) labels/title untouched
         axes[i][0].text(-0.42, 0.5, label, transform=axes[i][0].transAxes, rotation=90,
                         va='center', ha='center', fontweight='bold', fontsize=11)
-        print(f"{label:16s} " + "  ".join(f'{fl}:σr={s:.3f} r={c:+.3f} Δμ={d:+.3f}' for fl, s, d, c in cells))
+        print(f"{label:16s} " + "   ".join(
+            f"{fl}: IQRr={m['iqr']:.2f} ρ={m['rho']:+.2f} | σr={m['sr']:.2f} r={m['r']:+.2f}"
+            for fl, m in cells))
 
     fig.tight_layout()
     fig.savefig(args.out, dpi=200, bbox_inches='tight')
