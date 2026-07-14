@@ -109,7 +109,9 @@ def hist2d_cell(ax, true, pred, label):
     ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
     ax.set_xlabel(f'true {label}'); ax.set_ylabel(f'predicted {label}')
     ax.set_title(f'{label} distribution')
-    return np.std(pred) / (np.std(true) + 1e-9), float(pred.mean() - true.mean()), mesh
+    sr = np.std(pred) / (np.std(true) + 1e-9)                  # spread ratio (1 = matches true spread)
+    corr = float(np.corrcoef(true, pred)[0, 1])                # does pred track true? (1 = on diagonal)
+    return sr, float(pred.mean() - true.mean()), corr, mesh
 
 
 def main():
@@ -133,13 +135,13 @@ def main():
         pred, true = data[label]
         cells = []
         for j, (idx, flabel) in enumerate(feats):
-            r, dmu, mesh = hist2d_cell(axes[i][j], true[:, idx], pred[:, idx], flabel)
+            sr, dmu, corr, mesh = hist2d_cell(axes[i][j], true[:, idx], pred[:, idx], flabel)
             fig.colorbar(mesh, ax=axes[i][j])
-            cells.append((flabel, r, dmu))
+            cells.append((flabel, sr, dmu, corr))
         # condition label on the row margin — leaves the cell (his) labels/title untouched
         axes[i][0].text(-0.42, 0.5, label, transform=axes[i][0].transAxes, rotation=90,
                         va='center', ha='center', fontweight='bold', fontsize=11)
-        print(f"{label:16s} " + "  ".join(f'{fl}:σr={r:.3f} Δμ={d:+.3f}' for fl, r, d in cells))
+        print(f"{label:16s} " + "  ".join(f'{fl}:σr={s:.3f} r={c:+.3f} Δμ={d:+.3f}' for fl, s, d, c in cells))
 
     fig.tight_layout()
     fig.savefig(args.out, dpi=200, bbox_inches='tight')
