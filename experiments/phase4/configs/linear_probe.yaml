@@ -1,0 +1,30 @@
+# Linear probe head training config — RAGGED forward (Phase 4).
+# Same as phase0/configs/linear_probe.yaml but reconstructs the encoder with the
+# ragged interaction embedding, matching how the 1M encoders were trained. The
+# phase0 config runs non-ragged and undersells ragged-trained encoders (train/eval
+# mismatch: the -1e9→BN padded-pair garbage leaks through the soft float key mask).
+# Use this config for the Phase 4 linear floor so all three protocols share one
+# (correct) forward.
+
+epochs: 10
+batch_size: 1000
+
+# Encoder architecture — must match the pretrained checkpoint
+embed_dim: 128
+num_heads: 8
+num_layers: 8
+dropout: 0.1
+expansion_factor: 4
+pair_embed_dims: [64, 64, 64]
+ragged_pair_embed: true
+
+optimizer:
+  lr: 0.001
+  weight_decay: 0.01
+
+scheduler:
+  T_max: 10
+  eta_min: 0.00001
+
+num_workers: 8
+pin_memory: true

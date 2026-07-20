@@ -19,9 +19,11 @@ class LinearProbeModel(nn.Module):
 
     Parameters
     ----------
-    encoder_weights : str
+    encoder_weights : str, optional
         Path to a checkpoint saved by JEPATrainer or MaskedModelTrainer.
         Must contain keys with the 'encoder.*' prefix (standard convention).
+        If None, the encoder is left randomly initialized (still frozen) — the
+        random-feature control for the frozen-probe protocols.
     embed_dim : int
         Encoder output dimension (default 128).
     num_classes : int
@@ -32,7 +34,7 @@ class LinearProbeModel(nn.Module):
 
     def __init__(
         self,
-        encoder_weights: str,
+        encoder_weights: Optional[str] = None,
         embed_dim: int = 128,
         num_classes: int = 10,
         encoder_kwargs: Optional[dict] = None,
@@ -43,13 +45,14 @@ class LinearProbeModel(nn.Module):
         self.processor = ParticleProcessor(to_multivector=True)
         self.encoder = LorentzParTEncoder(embed_dim=embed_dim, **kw)
 
-        state_dict = torch.load(encoder_weights, map_location='cpu', weights_only=True)
-        filtered = {
-            k[len('encoder.'):]: v
-            for k, v in state_dict.items()
-            if k.startswith('encoder.')
-        }
-        self.encoder.load_state_dict(filtered, strict=False)
+        if encoder_weights is not None:
+            state_dict = torch.load(encoder_weights, map_location='cpu', weights_only=True)
+            filtered = {
+                k[len('encoder.'):]: v
+                for k, v in state_dict.items()
+                if k.startswith('encoder.')
+            }
+            self.encoder.load_state_dict(filtered, strict=False)
 
         for p in self.encoder.parameters():
             p.requires_grad_(False)

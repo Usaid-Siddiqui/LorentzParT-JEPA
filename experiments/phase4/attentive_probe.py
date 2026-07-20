@@ -1,16 +1,19 @@
 """
-Linear probe evaluation for SSL representations.
+Attentive probe evaluation for SSL representations.
 
-Trains only a linear head on top of a frozen pretrained encoder (mean-pooled
-embeddings). This is the standard SSL linear evaluation protocol — a clean
-measure of representation quality that is not confounded by fine-tuning.
+Trains only a class-attention head on top of a FROZEN pretrained encoder — the
+I-JEPA frozen-evaluation protocol. Strictly more expressive than the linear
+probe (mean-pool + linear), which is known to undersell JEPA features, so this
+is the fair frozen-encoder ceiling between the linear probe and full fine-tuning.
 
-Must be run from the LorentzParT_JEPA/ root directory:
+Mirrors experiments/phase0/linear_probe.py (same harness, metrics, JSON output);
+only the model (AttentiveProbeModel) and the trained params (the class-attention
+head) differ.
 
-    python experiments/phase0/linear_probe.py \\
-        --data-dir ./data \\
-        --weights ./logs/ParticleJEPA/best/jepa_seed42.pt \\
-        --run-name jepa_probe_seed42 \\
+    python experiments/phase4/attentive_probe.py \\
+        --data-dir ./data_1m \\
+        --weights ./logs/ParticleJEPA/best/jepa_1m_ragged_seed42_best.pt \\
+        --run-name attn_jepa_1m_seed42 \\
         --seed 42
 
 Results are written to --output-dir as <run-name>.json.
@@ -32,7 +35,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import roc_auc_score
 
-from src.models.linear_probe import LinearProbeModel
+from src.models.attentive_probe import AttentiveProbeModel
 from src.utils import set_seed
 from src.utils.data import NpyJetClassDataset
 
@@ -50,14 +53,14 @@ CLASS_NAMES = [
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Linear probe on pretrained LorentzParT encoder")
+    p = argparse.ArgumentParser(description="Attentive probe on pretrained LorentzParT encoder")
     p.add_argument('--data-dir', default='./data')
     p.add_argument('--weights', default=None,
                    help='Pretrained encoder checkpoint (.pt). Omit for the random-feature (scratch) control.')
-    p.add_argument('--config-path', default='experiments/phase0/configs/linear_probe.yaml')
+    p.add_argument('--config-path', default='experiments/phase4/configs/attentive_probe.yaml')
     p.add_argument('--run-name', default=None)
     p.add_argument('--seed', type=int, default=42)
-    p.add_argument('--output-dir', default='./experiments/phase0/results')
+    p.add_argument('--output-dir', default='./experiments/phase4/results')
     return p.parse_args()
 
 
@@ -95,21 +98,22 @@ def main():
         cfg = yaml.safe_load(f)
 
     encoder_kwargs = {
-        'num_heads':        cfg.get('num_heads',        8),
         'num_layers':       cfg.get('num_layers',       8),
         'dropout':          cfg.get('dropout',          0.1),
         'expansion_factor': cfg.get('expansion_factor', 4),
         'pair_embed_dims':  cfg.get('pair_embed_dims',  [64, 64, 64]),
-        # Must match the encoder's trained forward. Ragged-trained encoders evaluated
-        # non-ragged apply the broken -1e9→BN forward (padded-pair garbage leaks into
-        # valid-query attention because key_padding_mask is a soft float mask), which
-        # undersells them. Default False preserves the historical phase0 behavior.
         'ragged_pair_embed': cfg.get('ragged_pair_embed', False),
     }
-    model = LinearProbeModel(
+    model = AttentiveProbeModel(
         encoder_weights=args.weights,
         embed_dim=cfg.get('embed_dim', 128),
         num_classes=10,
+        num_heads=cfg.get('num_heads', 8),
+        num_cls_layers=cfg.get('num_cls_layers', 2),
+        hidden_dim=cfg.get('hidden_dim', 256),
+        num_mlp_layers=cfg.get('num_mlp_layers', 0),
+        expansion_factor=cfg.get('expansion_factor', 4),
+        dropout=cfg.get('dropout', 0.1),
         encoder_kwargs=encoder_kwargs,
     ).to(device)
 
@@ -145,12 +149,12 @@ def main():
 
     opt_cfg = cfg.get('optimizer', {})
     optimizer = torch.optim.AdamW(
-        model.head.parameters(),
+        model.head_parameters(),
         lr=opt_cfg.get('lr', 1e-3),
         weight_decay=opt_cfg.get('weight_decay', 0.01),
     )
     sched_cfg = cfg.get('scheduler', {})
-    epochs = cfg.get('epochs', 10)
+    epochs = cfg.get('epochs', 20)
     scheduler = CosineAnnealingLR(
         optimizer,
         T_max=sched_cfg.get('T_max', epochs),
@@ -182,7 +186,7 @@ def main():
     train_time_s = time.monotonic() - t_start
     test_acc, test_auc, per_class_acc, per_class_auc = evaluate(model, test_loader, device)
 
-    print(f"\nLinear probe results ({args.run_name})")
+    print(f"\nAttentive probe results ({args.run_name})")
     print(f"  test_acc:     {test_acc:.4f}")
     print(f"  test_auc:     {test_auc:.4f}")
     print(f"  best_val_acc: {best_val_acc:.4f}")
@@ -192,7 +196,7 @@ def main():
     for name, acc, auc in zip(CLASS_NAMES, per_class_acc, per_class_auc):
         print(f"  {name:<12}: acc={acc:.4f}  auc={auc:.4f}")
 
-    run_name = args.run_name or f'probe_seed{args.seed}'
+    run_name = args.run_name or f'attn_probe_seed{args.seed}'
     results = {
         'run_name':       run_name,
         'seed':           args.seed,
