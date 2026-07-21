@@ -128,3 +128,84 @@ class AttentiveProbeModel(nn.Module):
 
         x_cls = self.layernorm(x_cls).squeeze(1)  # (B, embed_dim)
         return self.classifier(x_cls)
+
+
+class AttentivePoolProbeModel(nn.Module):
+    """
+    Frozen pretrained encoder + a single-query attention-pool head (I-JEPA style).
+
+    The minimal attentive readout: ONE learnable query attends ONCE over the frozen
+    particle embeddings (one multi-head cross-attention, one softmax), followed by a
+    LayerNorm and a linear classifier — no feedforward, no stacked blocks. This is
+    deliberately much weaker than ``AttentiveProbeModel``'s 2-block class-attention
+    head, whose capacity was enough to classify from random-init encoder features
+    (the scratch control tied the pretrained encoders), defeating the probe. Keeping
+    the head minimal is what makes the random-feature floor meaningful again.
+
+    Unlike the frozen encoder (which is fed the float padding mask it was trained
+    with), the head's pooling attention uses a BOOL ``key_padding_mask`` so padded
+    particles are truly excluded from the pool rather than softly down-weighted.
+
+    Mirrors ``AttentiveProbeModel``'s encoder loading/freeze and ``head_parameters``;
+    only the head differs. ``encoder_weights=None`` gives the random-feature control.
+    """
+
+    def __init__(
+        self,
+        encoder_weights: Optional[str] = None,
+        embed_dim: int = 128,
+        num_classes: int = 10,
+        num_heads: int = 8,
+        encoder_kwargs: Optional[dict] = None,
+    ):
+        super().__init__()
+
+        kw = encoder_kwargs or {}
+        self.processor = ParticleProcessor(to_multivector=True)
+        self.encoder = LorentzParTEncoder(embed_dim=embed_dim, num_heads=num_heads, **kw)
+
+        if encoder_weights is not None:
+            state_dict = torch.load(encoder_weights, map_location='cpu', weights_only=True)
+            filtered = {
+                k[len('encoder.'):]: v
+                for k, v in state_dict.items()
+                if k.startswith('encoder.')
+            }
+            self.encoder.load_state_dict(filtered, strict=False)
+
+        for p in self.encoder.parameters():
+            p.requires_grad_(False)
+
+        # Lightweight head: one learnable query, one cross-attention pool, linear.
+        self.query = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        nn.init.normal_(self.query, std=0.02)
+        self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        self.norm = nn.LayerNorm(embed_dim)
+        self.head = nn.Linear(embed_dim, num_classes)
+
+    def head_parameters(self):
+        """Trainable head params (everything but the frozen encoder) — for the optimizer."""
+        return [p for n, p in self.named_parameters() if not n.startswith('encoder.')]
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Parameters
+        ----------
+        x : Tensor, shape (B, N, 4)
+            Normalized particle features [pT, eta, phi, E].
+
+        Returns
+        -------
+        logits : Tensor, shape (B, num_classes)
+        """
+        pad_bool = x[..., 3] == 0  # (B, N) True at padded particles
+
+        with torch.no_grad():
+            mv, U = self.processor(x)
+            embeddings = self.encoder(mv, pad_bool.float(), U)  # encoder: trained w/ float mask
+
+        q = self.query.expand(x.size(0), -1, -1)                # (B, 1, embed_dim)
+        pooled, _ = self.attn(q, embeddings, embeddings,
+                              key_padding_mask=pad_bool)         # bool mask: hard-exclude padding
+        pooled = self.norm(pooled.squeeze(1))                   # (B, embed_dim)
+        return self.head(pooled)

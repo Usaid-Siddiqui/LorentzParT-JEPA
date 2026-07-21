@@ -4,5 +4,5 @@ from .particle_transformer import ParticleTransformer
 from .jepa import ParticleJEPA
 from .predictor import ParticlePredictor
 from .linear_probe import LinearProbeModel
-from .attentive_probe import AttentiveProbeModel
+from .attentive_probe import AttentiveProbeModel, AttentivePoolProbeModel
 from .attention_gate import AttentionGate

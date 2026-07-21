@@ -35,7 +35,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import roc_auc_score
 
-from src.models.attentive_probe import AttentiveProbeModel
+from src.models.attentive_probe import AttentiveProbeModel, AttentivePoolProbeModel
 from src.utils import set_seed
 from src.utils.data import NpyJetClassDataset
 
@@ -104,18 +104,30 @@ def main():
         'pair_embed_dims':  cfg.get('pair_embed_dims',  [64, 64, 64]),
         'ragged_pair_embed': cfg.get('ragged_pair_embed', False),
     }
-    model = AttentiveProbeModel(
-        encoder_weights=args.weights,
-        embed_dim=cfg.get('embed_dim', 128),
-        num_classes=10,
-        num_heads=cfg.get('num_heads', 8),
-        num_cls_layers=cfg.get('num_cls_layers', 2),
-        hidden_dim=cfg.get('hidden_dim', 256),
-        num_mlp_layers=cfg.get('num_mlp_layers', 0),
-        expansion_factor=cfg.get('expansion_factor', 4),
-        dropout=cfg.get('dropout', 0.1),
-        encoder_kwargs=encoder_kwargs,
-    ).to(device)
+    head_type = cfg.get('head_type', 'full')   # 'full' = 2-block class-attn; 'pool' = 1-query I-JEPA pool
+    if head_type == 'pool':
+        model = AttentivePoolProbeModel(
+            encoder_weights=args.weights,
+            embed_dim=cfg.get('embed_dim', 128),
+            num_classes=10,
+            num_heads=cfg.get('num_heads', 8),
+            encoder_kwargs=encoder_kwargs,
+        ).to(device)
+    else:
+        model = AttentiveProbeModel(
+            encoder_weights=args.weights,
+            embed_dim=cfg.get('embed_dim', 128),
+            num_classes=10,
+            num_heads=cfg.get('num_heads', 8),
+            num_cls_layers=cfg.get('num_cls_layers', 2),
+            hidden_dim=cfg.get('hidden_dim', 256),
+            num_mlp_layers=cfg.get('num_mlp_layers', 0),
+            expansion_factor=cfg.get('expansion_factor', 4),
+            dropout=cfg.get('dropout', 0.1),
+            encoder_kwargs=encoder_kwargs,
+        ).to(device)
+    print(f"[model] attentive head_type={head_type}  "
+          f"trainable head params={sum(p.numel() for p in model.head_parameters()):,}")
 
     loader_kw = dict(
         batch_size=cfg.get('batch_size', 1000),

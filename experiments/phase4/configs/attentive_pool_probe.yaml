@@ -1,0 +1,32 @@
+# Lightweight attentive-pool probe (I-JEPA style) — the GATE re-test.
+# head_type: pool selects AttentivePoolProbeModel: ONE learnable query, ONE
+# cross-attention pool, LayerNorm, linear. Deliberately far weaker than the full
+# 2-block class-attention head (head_type: full, attentive_probe.yaml), whose
+# capacity let a random-init encoder match the pretrained ones (scratch tied MAE),
+# defeating the probe. If the scratch control now drops clearly below JEPA/MAE, the
+# attentive protocol is valid; if scratch still ties them, drop attentive from Phase 4.
+
+head_type: pool
+
+epochs: 20
+batch_size: 1000
+
+# Encoder architecture — must match the pretrained checkpoint
+embed_dim: 128
+num_heads: 8
+num_layers: 8
+dropout: 0.1
+expansion_factor: 4
+pair_embed_dims: [64, 64, 64]
+ragged_pair_embed: true
+
+optimizer:
+  lr: 0.001
+  weight_decay: 0.01
+
+scheduler:
+  T_max: 20
+  eta_min: 0.00001
+
+num_workers: 8
+pin_memory: true
