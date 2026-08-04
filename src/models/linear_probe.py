@@ -59,6 +59,10 @@ class LinearProbeModel(nn.Module):
 
         self.head = nn.Linear(embed_dim, num_classes)
 
+    def head_parameters(self):
+        """Trainable head params (the frozen encoder is excluded) — for the optimizer."""
+        return list(self.head.parameters())
+
     def forward(self, x: Tensor) -> Tensor:
         """
         Parameters

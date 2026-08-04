@@ -10,7 +10,7 @@ vector>=1.0.0
 # Lorentz-equivariant transformer components (L-GATr)
 # NOTE: use 'lgatr' (not 'lorentz-gatr') — different package, correct module name
 # pip install lgatr
-lgatr>=1.4.0
+lgatr==1.4.3      # pin exact: 2.0.0 breaks the EquiLinear API (adds required 'primitives')
 einops>=0.6.0      # required by lgatr
 
 # Experiment utilities
