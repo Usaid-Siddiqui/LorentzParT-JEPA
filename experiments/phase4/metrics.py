@@ -9,10 +9,19 @@ from sklearn.metrics import roc_auc_score, roc_curve
 
 
 def background_rejection(y_true_bin, y_score, eps_s=0.5):
-    """1/ε_B at signal efficiency ε_S (default 0.5). y_true_bin: 1=signal, 0=bkg."""
+    """1/ε_B at signal efficiency ε_S (default 0.5). y_true_bin: 1=signal, 0=bkg.
+
+    A near-perfect classifier drives ε_B→0, so 1/ε_B blows up (and jitters wildly
+    seed-to-seed from ROC-interpolation noise). Cap it at the statistical limit: with
+    N_bkg background test jets you cannot resolve a rejection finer than ~N_bkg, so
+    floor ε_B at 1/N_bkg — the reported value saturates at N_bkg ("test-stat limited")
+    instead of exploding to 1e9.
+    """
     fpr, tpr, _ = roc_curve(y_true_bin, y_score)     # fpr = ε_B, tpr = ε_S
     eps_b = float(np.interp(eps_s, tpr, fpr))         # background eff at the target signal eff
-    return 1.0 / max(eps_b, 1e-9)
+    n_bkg = int((y_true_bin == 0).sum())
+    eps_b_floor = 1.0 / max(n_bkg, 1)
+    return 1.0 / max(eps_b, eps_b_floor)
 
 
 def classification_metrics(y_true_onehot, y_prob, kind, signal_idx=None):
