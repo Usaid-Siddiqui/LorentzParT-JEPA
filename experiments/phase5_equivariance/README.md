@@ -1,16 +1,19 @@
 # Phase 5 — True Lorentz equivariance (alternate branch)
 
-Isolated phase: fix the broken invariance in LorentzParT/LorentzGATr and measure whether
-*exact* Lorentz equivariance changes anything. Kept separate so it never disturbs the
-published Phase 0–4 results (which run the inherited, non-invariant architecture).
+Isolated phase: build the *fully* Lorentz-equivariant version of the model and measure whether
+exact equivariance changes anything — in accuracy AND compute. Kept separate so it never disturbs
+the published Phase 0–4 results (which run the efficient hybrid architecture).
 
 ## Background
-`scripts/equivariance_test.py` showed the shipped "LorentzParT" is **not** Lorentz-invariant
-(rotation/boost move the softmax output by ~3e-3 vs a ~2e-7 permutation-control floor). Two
-inherited causes (from Nguyen's original — not our regression): a dense `Linear(16, embed_dim)`
-over raw geometric-algebra components, and `embed_vector` fed `(pT,η,φ,E)` instead of Cartesian
-`(E,px,py,pz)`. A third, subtler cause: the per-feature normalization (pT/92.7, E/133.9) distorts
-the 4-vector. See memory `equivariance-broken`.
+LorentzParT is a **hybrid by design**, not a fully equivariant model: a ParT core "nudged in the
+right physical direction by a small dose of LGATr's Lorentz structure" (Nguyen's GSoC-2025 article),
+which deliberately avoids the "computational overhead" of strict equivariance. `scripts/equivariance_test.py`
+quantifies how far that nudge lands from exact invariance: rotation/boost move the softmax output by
+~3e-3 (vs a ~2e-7 permutation-control floor) — a lean toward invariance, not a guarantee. The three
+things that make it inexact (all consistent with the hybrid intent): a dense `Linear(16, embed_dim)`
+bridging the geometric-algebra embedding to the scalar transformer core, `embed_vector` fed `(pT,η,φ,E)`
+instead of Cartesian, and the per-feature normalization (pT/92.7, E/133.9) which distorts the 4-vector.
+This phase builds the exact-equivariant endpoint to price the tradeoff. See memory `equivariance-broken`.
 
 ## Milestones
 - **M1 — verify the fix is exactly invariant. ✅ DONE.**

@@ -15,9 +15,13 @@ can detect an invariance that is genuinely present.
 
     max|Δ softmax-prob|  ~1e-6 = invariant (rounding floor);  >>0 = broken.
 
-Finding (see memory 'equivariance-broken'): the classifier is NOT Lorentz-invariant —
-`self.proj = nn.Linear(16, embed_dim)` after EquiLinear mixes the geometric-algebra grades
-and destroys the symmetry (inherited from Nguyen's original LorentzParT/processor).
+Finding: LorentzParT is not exactly Lorentz-invariant — by design. It is a HYBRID: a ParT
+core "nudged in the right physical direction by a small dose of LGATr's Lorentz structure"
+(Nguyen's GSoC-2025 article), which deliberately avoids the "computational overhead" of strict
+equivariance. This test measures how far that nudge lands from exact invariance: ~3e-3 on
+rotation/boost, vs a full-L-GATr model's ~1e-7 (see experiments/phase5_equivariance/). The
+`self.proj = nn.Linear(16, embed_dim)` after EquiLinear is the bridge from the geometric-algebra
+embedding to the efficient scalar transformer core — the mechanism of the tradeoff, not a bug.
 
     python scripts/equivariance_test.py                 # random init
     python scripts/equivariance_test.py --weights <.pt>  # trained checkpoint
