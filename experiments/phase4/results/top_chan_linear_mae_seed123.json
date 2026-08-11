@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.90265,
+  "test_auc": 0.9585776149999999,
+  "bkg_rej_at_0.5": 44.052863436123346,
+  "signal_idx": 0,
+  "best_val_acc": 0.90425,
+  "train_time_s": 304.53543336398434,
+  "task": "top_chan",
+  "protocol": "linear",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed123.pt",
+  "encoder_label": "mae",
+  "seed": 123,
+  "k": 2,
+  "run_name": "top_chan_linear_mae_seed123"
+}

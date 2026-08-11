@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.53885,
+  "test_auc": 0.5595534999999999,
+  "bkg_rej_at_0.5": 2.3640661938534278,
+  "signal_idx": 1,
+  "best_val_acc": 0.5499,
+  "train_time_s": 290.1851366700139,
+  "task": "wz",
+  "protocol": "pool",
+  "encoder": "./logs/ParticleJEPA/best/jepa_1m_ragged_seed456_best.pt",
+  "encoder_label": "jepa",
+  "seed": 456,
+  "k": 2,
+  "run_name": "wz_pool_jepa_seed456"
+}

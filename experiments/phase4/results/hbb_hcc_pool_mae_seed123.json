@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.5801,
+  "test_auc": 0.61084487,
+  "bkg_rej_at_0.5": 2.884338044418806,
+  "signal_idx": 0,
+  "best_val_acc": 0.58255,
+  "train_time_s": 310.1671072480967,
+  "task": "hbb_hcc",
+  "protocol": "pool",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed123.pt",
+  "encoder_label": "mae",
+  "seed": 123,
+  "k": 2,
+  "run_name": "hbb_hcc_pool_mae_seed123"
+}

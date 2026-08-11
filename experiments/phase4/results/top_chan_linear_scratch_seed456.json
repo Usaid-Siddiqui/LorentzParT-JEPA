@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.8504,
+  "test_auc": 0.9151080500000001,
+  "bkg_rej_at_0.5": 18.315018315018314,
+  "signal_idx": 0,
+  "best_val_acc": 0.8526,
+  "train_time_s": 303.9344663360389,
+  "task": "top_chan",
+  "protocol": "linear",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 456,
+  "k": 2,
+  "run_name": "top_chan_linear_scratch_seed456"
+}

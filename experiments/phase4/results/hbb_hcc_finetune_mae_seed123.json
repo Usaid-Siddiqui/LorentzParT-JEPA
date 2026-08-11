@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.70685,
+  "test_auc": 0.7793421300000001,
+  "bkg_rej_at_0.5": 6.587615283267458,
+  "signal_idx": 0,
+  "best_val_acc": 0.707,
+  "train_time_s": 692.7429913029773,
+  "task": "hbb_hcc",
+  "protocol": "finetune",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed123.pt",
+  "encoder_label": "mae",
+  "seed": 123,
+  "k": 2,
+  "run_name": "hbb_hcc_finetune_mae_seed123"
+}

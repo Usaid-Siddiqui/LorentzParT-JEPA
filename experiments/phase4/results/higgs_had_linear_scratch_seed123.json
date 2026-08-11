@@ -1,0 +1,23 @@
+{
+  "test_acc": 0.48696666666666666,
+  "test_auc": 0.6768010183333333,
+  "per_class_auc": [
+    0.5793368375,
+    0.6868009775,
+    0.7642652400000001
+  ],
+  "per_class_acc": [
+    0.3905,
+    0.4831,
+    0.5873
+  ],
+  "best_val_acc": 0.4886333333333333,
+  "train_time_s": 347.5872858300572,
+  "task": "higgs_had",
+  "protocol": "linear",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 123,
+  "k": 3,
+  "run_name": "higgs_had_linear_scratch_seed123"
+}

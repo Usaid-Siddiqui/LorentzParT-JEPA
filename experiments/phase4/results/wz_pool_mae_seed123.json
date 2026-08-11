@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.56525,
+  "test_auc": 0.594046375,
+  "bkg_rej_at_0.5": 2.685284640171858,
+  "signal_idx": 1,
+  "best_val_acc": 0.56765,
+  "train_time_s": 291.2755203129491,
+  "task": "wz",
+  "protocol": "pool",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed123.pt",
+  "encoder_label": "mae",
+  "seed": 123,
+  "k": 2,
+  "run_name": "wz_pool_mae_seed123"
+}

@@ -1,0 +1,23 @@
+{
+  "test_acc": 0.5366,
+  "test_auc": 0.7331965333333333,
+  "per_class_auc": [
+    0.6332639425,
+    0.731644035,
+    0.8346816225000001
+  ],
+  "per_class_acc": [
+    0.312,
+    0.5396,
+    0.7582
+  ],
+  "best_val_acc": 0.5401666666666667,
+  "train_time_s": 354.6304171390366,
+  "task": "higgs_had",
+  "protocol": "pool",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed456.pt",
+  "encoder_label": "mae",
+  "seed": 456,
+  "k": 3,
+  "run_name": "higgs_had_pool_mae_seed456"
+}

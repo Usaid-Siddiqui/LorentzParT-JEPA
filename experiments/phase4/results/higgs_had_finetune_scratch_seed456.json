@@ -1,0 +1,23 @@
+{
+  "test_acc": 0.6659333333333334,
+  "test_auc": 0.8388616158333333,
+  "per_class_auc": [
+    0.8012500275000001,
+    0.8214609325,
+    0.8938738875
+  ],
+  "per_class_acc": [
+    0.6159,
+    0.5866,
+    0.7953
+  ],
+  "best_val_acc": 0.6642,
+  "train_time_s": 880.9082470380235,
+  "task": "higgs_had",
+  "protocol": "finetune",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 456,
+  "k": 3,
+  "run_name": "higgs_had_finetune_scratch_seed456"
+}

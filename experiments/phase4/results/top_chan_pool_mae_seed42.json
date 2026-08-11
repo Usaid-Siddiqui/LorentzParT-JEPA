@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.9171,
+  "test_auc": 0.9693284550000001,
+  "bkg_rej_at_0.5": 71.42857142857143,
+  "signal_idx": 0,
+  "best_val_acc": 0.91575,
+  "train_time_s": 313.15182543499395,
+  "task": "top_chan",
+  "protocol": "pool",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed42.pt",
+  "encoder_label": "mae",
+  "seed": 42,
+  "k": 2,
+  "run_name": "top_chan_pool_mae_seed42"
+}

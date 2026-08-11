@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.84325,
+  "test_auc": 0.9108540000000002,
+  "bkg_rej_at_0.5": 16.528925619834713,
+  "signal_idx": 0,
+  "best_val_acc": 0.84555,
+  "train_time_s": 303.87802971398924,
+  "task": "top_chan",
+  "protocol": "linear",
+  "encoder": "./logs/ParticleJEPA/best/jepa_1m_ragged_seed456_best.pt",
+  "encoder_label": "jepa",
+  "seed": 456,
+  "k": 2,
+  "run_name": "top_chan_linear_jepa_seed456"
+}

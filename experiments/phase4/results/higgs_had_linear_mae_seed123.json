@@ -1,0 +1,23 @@
+{
+  "test_acc": 0.5346,
+  "test_auc": 0.7292480675,
+  "per_class_auc": [
+    0.62927284,
+    0.72774963,
+    0.8307217325
+  ],
+  "per_class_acc": [
+    0.3097,
+    0.5364,
+    0.7577
+  ],
+  "best_val_acc": 0.5348,
+  "train_time_s": 347.947882664972,
+  "task": "higgs_had",
+  "protocol": "linear",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed123.pt",
+  "encoder_label": "mae",
+  "seed": 123,
+  "k": 3,
+  "run_name": "higgs_had_linear_mae_seed123"
+}

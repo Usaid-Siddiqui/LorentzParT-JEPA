@@ -1,0 +1,27 @@
+{
+  "test_acc": 0.42934,
+  "test_auc": 0.751902612,
+  "per_class_auc": [
+    0.64770150875,
+    0.6897884449999999,
+    0.82719325875,
+    0.7048279575,
+    0.89000189
+  ],
+  "per_class_acc": [
+    0.16,
+    0.2904,
+    0.5987,
+    0.4132,
+    0.6844
+  ],
+  "best_val_acc": 0.42774,
+  "train_time_s": 402.8040364210028,
+  "task": "higgs5",
+  "protocol": "pool",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed42.pt",
+  "encoder_label": "mae",
+  "seed": 42,
+  "k": 5,
+  "run_name": "higgs5_pool_mae_seed42"
+}

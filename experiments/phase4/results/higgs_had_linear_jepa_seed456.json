@@ -1,0 +1,23 @@
+{
+  "test_acc": 0.5269333333333334,
+  "test_auc": 0.721731585,
+  "per_class_auc": [
+    0.6184332074999999,
+    0.7217726375,
+    0.8249889100000001
+  ],
+  "per_class_acc": [
+    0.2979,
+    0.5526,
+    0.7303
+  ],
+  "best_val_acc": 0.5298333333333334,
+  "train_time_s": 346.94074270199053,
+  "task": "higgs_had",
+  "protocol": "linear",
+  "encoder": "./logs/ParticleJEPA/best/jepa_1m_ragged_seed456_best.pt",
+  "encoder_label": "jepa",
+  "seed": 456,
+  "k": 3,
+  "run_name": "higgs_had_linear_jepa_seed456"
+}

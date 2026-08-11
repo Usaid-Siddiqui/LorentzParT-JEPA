@@ -1,0 +1,23 @@
+{
+  "test_acc": 0.5332,
+  "test_auc": 0.7266321758333333,
+  "per_class_auc": [
+    0.6249198249999999,
+    0.7260707825,
+    0.8289059200000001
+  ],
+  "per_class_acc": [
+    0.3128,
+    0.5095,
+    0.7773
+  ],
+  "best_val_acc": 0.5318333333333334,
+  "train_time_s": 355.2670317199081,
+  "task": "higgs_had",
+  "protocol": "pool",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 42,
+  "k": 3,
+  "run_name": "higgs_had_pool_scratch_seed42"
+}

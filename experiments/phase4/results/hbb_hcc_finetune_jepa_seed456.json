@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.71505,
+  "test_auc": 0.7900918549999999,
+  "bkg_rej_at_0.5": 7.072135785007072,
+  "signal_idx": 0,
+  "best_val_acc": 0.71255,
+  "train_time_s": 691.9443852229742,
+  "task": "hbb_hcc",
+  "protocol": "finetune",
+  "encoder": "./logs/ParticleJEPA/best/jepa_1m_ragged_seed456_best.pt",
+  "encoder_label": "jepa",
+  "seed": 456,
+  "k": 2,
+  "run_name": "hbb_hcc_finetune_jepa_seed456"
+}

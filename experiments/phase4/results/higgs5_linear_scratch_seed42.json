@@ -1,0 +1,27 @@
+{
+  "test_acc": 0.35578,
+  "test_auc": 0.68369308675,
+  "per_class_auc": [
+    0.57237641,
+    0.60733345875,
+    0.7719807387500001,
+    0.6469474412500001,
+    0.8198273850000001
+  ],
+  "per_class_acc": [
+    0.14,
+    0.1268,
+    0.5224,
+    0.2221,
+    0.7676
+  ],
+  "best_val_acc": 0.3568,
+  "train_time_s": 394.4238086800324,
+  "task": "higgs5",
+  "protocol": "linear",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 42,
+  "k": 5,
+  "run_name": "higgs5_linear_scratch_seed42"
+}

@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.56065,
+  "test_auc": 0.582115465,
+  "bkg_rej_at_0.5": 2.6041666666666665,
+  "signal_idx": 0,
+  "best_val_acc": 0.56635,
+  "train_time_s": 301.8784410429653,
+  "task": "hbb_hcc",
+  "protocol": "linear",
+  "encoder": "./logs/ParticleJEPA/best/jepa_1m_ragged_seed42_best.pt",
+  "encoder_label": "jepa",
+  "seed": 42,
+  "k": 2,
+  "run_name": "hbb_hcc_linear_jepa_seed42"
+}

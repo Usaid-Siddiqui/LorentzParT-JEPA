@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.5352,
+  "test_auc": 0.55398597,
+  "bkg_rej_at_0.5": 2.35626767200754,
+  "signal_idx": 1,
+  "best_val_acc": 0.5437,
+  "train_time_s": 282.41406262805685,
+  "task": "wz",
+  "protocol": "linear",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 42,
+  "k": 2,
+  "run_name": "wz_linear_scratch_seed42"
+}

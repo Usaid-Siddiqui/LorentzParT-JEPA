@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.7138,
+  "test_auc": 0.7793457599999999,
+  "bkg_rej_at_0.5": 6.87757909215956,
+  "signal_idx": 1,
+  "best_val_acc": 0.71105,
+  "train_time_s": 572.5165330480086,
+  "task": "wz",
+  "protocol": "finetune",
+  "encoder": "./logs/LorentzParT/best/mae_1m_ragged_seed42.pt",
+  "encoder_label": "mae",
+  "seed": 42,
+  "k": 2,
+  "run_name": "wz_finetune_mae_seed42"
+}

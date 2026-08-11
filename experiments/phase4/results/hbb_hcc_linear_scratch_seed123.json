@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.55765,
+  "test_auc": 0.581002515,
+  "bkg_rej_at_0.5": 2.5974025974025974,
+  "signal_idx": 0,
+  "best_val_acc": 0.5555,
+  "train_time_s": 302.023457405041,
+  "task": "hbb_hcc",
+  "protocol": "linear",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 123,
+  "k": 2,
+  "run_name": "hbb_hcc_linear_scratch_seed123"
+}

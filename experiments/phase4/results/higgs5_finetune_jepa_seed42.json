@@ -1,0 +1,27 @@
+{
+  "test_acc": 0.69686,
+  "test_auc": 0.91566294575,
+  "per_class_auc": [
+    0.87230666375,
+    0.86412214125,
+    0.9024506187500001,
+    0.9477249312499998,
+    0.9917103737499999
+  ],
+  "per_class_acc": [
+    0.5789,
+    0.4847,
+    0.7199,
+    0.7924,
+    0.9084
+  ],
+  "best_val_acc": 0.69618,
+  "train_time_s": 916.8985272740247,
+  "task": "higgs5",
+  "protocol": "finetune",
+  "encoder": "./logs/ParticleJEPA/best/jepa_1m_ragged_seed42_best.pt",
+  "encoder_label": "jepa",
+  "seed": 42,
+  "k": 5,
+  "run_name": "higgs5_finetune_jepa_seed42"
+}
