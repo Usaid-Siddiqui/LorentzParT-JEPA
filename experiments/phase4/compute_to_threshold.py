@@ -1,5 +1,5 @@
 """
-Phase 4 — the honest finetune-compute metric: compute-to-threshold.
+Phase 4 — finetune compute-to-threshold metric.
 
 `analyze_phase4.py` charges finetune at its full train_time (time-to-early-stop), which is
 biased against pretrained methods (they plateau higher, so they stop later). The fair question
@@ -139,7 +139,7 @@ def main():
                 label=f'{enc} (pretrain + N finetunes-to-target)')
     ax.set_xlabel('number of downstream tasks')
     ax.set_ylabel('cumulative compute-to-threshold (s)')
-    ax.set_title('Amortization — honest compute-to-threshold metric')
+    ax.set_title('Cumulative compute-to-threshold vs. number of downstream tasks')
     ax.set_xticks(xs); ax.legend(fontsize=9); ax.grid(alpha=0.3)
     fig.tight_layout(); fig.savefig(args.out, dpi=200)
     print(f"\nwrote {args.out}")
