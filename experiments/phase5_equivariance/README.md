@@ -1,47 +1,79 @@
-# Phase 5 — True Lorentz equivariance (alternate branch)
+# Phase 5 — Lorentz equivariance: the hybrid tradeoff, quantified
 
-Isolated phase: build the *fully* Lorentz-equivariant version of the model and measure whether
-exact equivariance changes anything — in accuracy AND compute. Kept separate so it never disturbs
-the published Phase 0–4 results (which run the efficient hybrid architecture).
+**Status: complete at M1 (the informative part). M2/M3 parked (see end).**
 
-## Background
-LorentzParT is a **hybrid by design**, not a fully equivariant model: a ParT core "nudged in the
-right physical direction by a small dose of LGATr's Lorentz structure" (Nguyen's GSoC-2025 article),
-which deliberately avoids the "computational overhead" of strict equivariance. `scripts/equivariance_test.py`
-quantifies how far that nudge lands from exact invariance: rotation/boost move the softmax output by
-~3e-3 (vs a ~2e-7 permutation-control floor) — a lean toward invariance, not a guarantee. The three
-things that make it inexact (all consistent with the hybrid intent): a dense `Linear(16, embed_dim)`
-bridging the geometric-algebra embedding to the scalar transformer core, `embed_vector` fed `(pT,η,φ,E)`
-instead of Cartesian, and the per-feature normalization (pT/92.7, E/133.9) which distorts the 4-vector.
-This phase builds the exact-equivariant endpoint to price the tradeoff. See memory `equivariance-broken`.
+This phase started from a question — *"is LorentzParT actually Lorentz-equivariant, and if we
+made it exactly so, would anything change?"* — and answered the cheap, decisive half of it. Kept
+isolated so it never disturbs the Phase 0–4 results (which run the efficient hybrid).
 
-## Milestones
-- **M1 — verify the fix is exactly invariant. ✅ DONE.**
-  `verify_invariance.py` — `InvariantGATr`: LGATr backbone + invariant readout
-  (`extract_scalar` on output mv channels + scalar-channel outputs; a Linear on invariants
-  stays invariant), Cartesian `embed_vector`, single global scale. Invariance test residuals
-  drop to the ~1e-7 floor on rotation, longitudinal boost, and transverse boost (vs ~3e-3
-  broken). Full SO(1,3) invariance, random init, no GPU.
-- **M2 — 100k performance comparison.** Promote `InvariantGATr` to a trainable model and
-  compare fixed-equivariant vs. broken LorentzParT (scratch, 10-class). Question: does exact
-  equivariance help, hurt, or tie? (Prior: likely ties — the Phase-1 washout suggests the
-  symmetry prior doesn't help here — which would be a strong "even *real* equivariance
-  doesn't help" result.)
-- **M3 — 1M run**, only if M2 is promising.
+## The question and the answer up front
+LorentzParT is a **hybrid by design**, not a fully equivariant model. Per Nguyen's GSoC-2025
+article, the ParT core is *"nudged in the right physical direction by a small dose of LGATr's
+Lorentz structure,"* and strict equivariance was deliberately avoided because it *"introduces
+computational overhead."* The EquiLinear layer *"might encourage the encoder to learn
+Lorentz-equivariant interactions"* — aspiration, not guarantee.
 
-## Open design decisions for M2 (not yet made)
-- **Full Lorentz vs collider subgroup.** M1 is full SO(1,3)-invariant (no spurions). Jet
-  physics has a preferred frame (beam axis), so the physically-motivated choice may be the
-  beam-preserving subgroup via L-GATr spurions (`get_spurions`). Compare both, or pick.
-- **Head.** M1 uses mean-pool for the test; a class-attention head on the *invariant* features
-  stays invariant and matches the other models — use that for training.
-- **Padding.** M1 tests all-valid jets; real jets need padded particles masked in LGATr attention.
-- **Normalization.** Must be a single global scale (covariant), not per-feature — changes the
-  data pipeline for this model only.
-- **SSL.** Whether to also pretrain JEPA/MAE on the invariant backbone, or first answer the
-  supervised scratch question.
+We put numbers on both halves of that stated tradeoff:
+- **How much of a nudge?** The classifier is ~3e-3 off invariance (vs a full-L-GATr's ~1e-7) — a
+  measurable lean toward physical structure, not a symmetry constraint.
+- **What does exact equivariance cost?** ~2.5× compute (with 7× fewer parameters).
 
-## Note
-Adopting this for real means re-pretraining + re-running the sweep (architecture change →
-results not comparable to Phase 0–4). M1 is the cheap proof; M2+ is the expensive part —
-gated on whether an equivariance claim is worth making.
+So this is not a bug report. It's the quantitative evidence for the design choice the article
+described qualitatively, and it places LorentzParT on a clean spectrum:
+
+| model | Lorentz invariance | compute | params |
+|---|---|---|---|
+| vanilla ParT | none | — | — |
+| **LorentzParT (hybrid)** | **~3e-3 nudge** | **1.0×** | 2.27M |
+| full L-GATr (`InvariantGATr`) | ~1e-7 (exact) | 2.5× | 0.31M |
+
+## M1 — the invariance measurement (`verify_invariance.py`, `scripts/equivariance_test.py`)
+Invariance is architectural, so both tests run on random-init models (no data, no GPU). Apply a
+Lorentz transform to the input 4-momenta and measure `max|Δ softmax-prob|`; a particle-permutation
+control (which the model *is* invariant to) validates that the test detects invariance when present.
+
+`max|Δprob|`:
+
+| transform | LorentzParT (hybrid) | `InvariantGATr` (exact) |
+|---|---|---|
+| permutation (control) | 2.2e-07 (invariant) | 1.5e-08 (invariant) |
+| azimuthal rotation | **3.3e-03** | **1.4e-07** |
+| longitudinal boost | **2.4e-03** | **9.5e-07** |
+| transverse boost | **1.3e-03** | **4.3e-07** |
+
+The hybrid breaks invariance by ~4 orders of magnitude over the control floor — the "nudge." The
+three things that make it inexact, all consistent with the hybrid intent:
+1. a dense `Linear(16, embed_dim)` bridging the geometric-algebra embedding to the scalar transformer
+   core (mixes GA grades — the mechanism of the tradeoff);
+2. `embed_vector` fed `(pT,η,φ,E)` rather than Cartesian `(E,px,py,pz)`;
+3. per-feature normalization (pT/92.7, E/133.9), which itself distorts the 4-vector.
+
+`InvariantGATr` fixes all three — LGATr backbone kept in multivector space, invariant readout
+(`extract_scalar` + scalar channels, no dense `Linear(16,·)`), Cartesian embedding, single global
+scale — and reaches exact full SO(1,3) invariance (~1e-7).
+
+## M1 — the compute measurement (CPU, B=32, N=128)
+| model | params | forward (ms) | × hybrid |
+|---|---|---|---|
+| LorentzParT (hybrid, 8 layers) | 2.27M | 162 | 1.0 |
+| `InvariantGATr` (8 blocks) | 0.31M | 410 | **2.5×** |
+
+Geometric-algebra profile: parameter-efficient but compute-dense (multivector contractions cost
+more per parameter). Exact equivariance is ~2.5× the compute. The 7× param-efficiency only helps in
+a data/memory-limited regime — not ours (labels free, compute-bound) — so it doesn't tip the balance.
+
+## Conclusion
+The hybrid is the **compute-efficient middle** of the equivariance spectrum, and that's a deliberate,
+now-validated choice: it captures physics-informed structure at ~40% the compute of exact
+equivariance. Given the Phase-1 ablation washout (the symmetry prior never visibly helps accuracy),
+the expected verdict on exact equivariance is **a 2.5× compute tax for no accuracy gain** — which
+*supports* the hybrid rather than indicting it. This dovetails with the project's compute-efficiency
+thesis: more symmetry is more compute, and here it doesn't buy accuracy.
+
+## M2/M3 — parked
+Building a trainable `InvariantGATr` (class-attention head on invariants, padding-masked LGATr,
+single-scale pipeline) and running the 100k/1M accuracy comparison would turn "likely ties" into a
+measured fact and complete the spectrum table. Deferred because the outcome is predictable and the
+GPU is better spent finishing the Phase-4 compute story. If revived: decide full-Lorentz vs
+beam-spurion subgroup (`get_spurions`) and supervised-scratch-first vs SSL. Adopting it for real
+means re-pretraining + re-running the sweep (results not comparable to Phase 0–4).
