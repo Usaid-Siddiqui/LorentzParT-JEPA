@@ -27,6 +27,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.utils.data.dataloader import read_file
 
+KINEMATIC = ['part_pt', 'part_eta', 'part_phi', 'part_energy']
+DISPLACEMENT = ['part_d0val', 'part_d0err', 'part_dzval', 'part_dzerr']  # track impact params
+
 
 # Maps class index → source ROOT filename prefix in val_5M.
 # Each prefix expands to {prefix}_*.root (sorted); the '_' guards TTBar vs TTBarLep.
@@ -57,10 +60,14 @@ def parse_args():
                         help="Random seed for reproducible splits")
     parser.add_argument("--max-particles", type=int, default=128,
                         help="Maximum number of particles per jet")
+    parser.add_argument("--with-displacement", action="store_true",
+                        help="Also extract the 4 track-displacement features (d0/dz val+err) → "
+                             "(N, 8, 128); they are standardized (train stats) with padded rows zeroed. "
+                             "Train the model with --num-extra-features 4.")
     return parser.parse_args()
 
 
-def load_class(data_dir: str, prefix: str, n_events: int, max_particles: int):
+def load_class(data_dir: str, prefix: str, n_events: int, max_particles: int, particle_features):
     """Read sorted {prefix}_*.root files until n_events collected; return (particles, label)."""
     files = sorted(glob.glob(os.path.join(data_dir, f"{prefix}_*.root")))
     if not files:
@@ -71,7 +78,8 @@ def load_class(data_dir: str, prefix: str, n_events: int, max_particles: int):
         if collected >= n_events:
             break
         print(f"  Reading {os.path.basename(fp)} ...", flush=True)
-        x_particles, _, y = read_file(fp, max_num_particles=max_particles)
+        x_particles, _, y = read_file(fp, max_num_particles=max_particles,
+                                      particle_features=particle_features)
         xs.append(x_particles.astype(np.float32))
         ys.append(y.astype(np.int32))
         collected += len(x_particles)
@@ -103,9 +111,11 @@ def main():
     print(f"Split: {args.train_per_class} train / {args.val_per_class} val / "
           f"{args.test_per_class} test per class\n")
 
+    feats = KINEMATIC + (DISPLACEMENT if args.with_displacement else [])
+
     tr, va = args.train_per_class, args.val_per_class
     for class_idx, prefix in CLASS_PREFIXES.items():
-        x, y = load_class(args.data_dir, prefix, events_per_class, args.max_particles)
+        x, y = load_class(args.data_dir, prefix, events_per_class, args.max_particles, feats)
 
         # Shuffle within class for random, disjoint train/val/test slices
         perm = rng.permutation(len(x))
@@ -115,6 +125,27 @@ def main():
         all_val_x.append(x[tr:tr + va]);       all_val_y.append(y[tr:tr + va])
         all_test_x.append(x[tr + va:]);        all_test_y.append(y[tr + va:])
 
+    # Displacement features: standardize with TRAIN stats over valid particles, then
+    # zero padded rows so padded particles stay all-zero (padding = zero-energy convention).
+    disp_mean = disp_std = None
+    if args.with_displacement:
+        Xtr = np.concatenate(all_train_x, axis=0)          # (N, 8, 128)
+        valid = Xtr[:, 3, :] > 0                            # energy>0 → real particle
+        disp_mean, disp_std = [], []
+        for f in range(4, 8):
+            v = Xtr[:, f, :][valid]
+            disp_mean.append(float(v.mean())); disp_std.append(float(v.std()) + 1e-6)
+        print("\nDisplacement standardization (train stats):")
+        for name, m, s in zip(DISPLACEMENT, disp_mean, disp_std):
+            print(f"  {name:14s} mean={m:+.4g}  std={s:.4g}")
+
+    def standardize(X):
+        valid = X[:, 3, :] > 0
+        for j, f in enumerate(range(4, 8)):
+            X[:, f, :] = (X[:, f, :] - disp_mean[j]) / disp_std[j]
+            col = X[:, f, :]; col[~valid] = 0.0
+        return X
+
     # Concatenate and shuffle each split globally
     for split_name, x_list, y_list in [
         ("train", all_train_x, all_train_y),
@@ -123,6 +154,8 @@ def main():
     ]:
         X = np.concatenate(x_list, axis=0)
         Y = np.concatenate(y_list, axis=0)
+        if args.with_displacement:
+            X = standardize(X)
         perm = rng.permutation(len(X))
         X, Y = X[perm], Y[perm]
 

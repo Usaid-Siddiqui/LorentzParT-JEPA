@@ -22,7 +22,8 @@ class LorentzParTEncoder(nn.Module):
         dropout: float = 0.1,
         expansion_factor: int = 4,
         pair_embed_dims: List[int] = [64, 64, 64],
-        ragged_pair_embed: bool = False
+        ragged_pair_embed: bool = False,
+        num_extra_features: int = 0
     ):
         super(LorentzParTEncoder, self).__init__()
         self.equilinear = EquiLinear(
@@ -31,7 +32,10 @@ class LorentzParTEncoder(nn.Module):
             in_s_channels=in_s_channels,
             out_s_channels=out_s_channels
         )
-        self.proj = nn.Linear(16, embed_dim)
+        # Extra per-particle scalar features (e.g. track displacement d0/dz) are
+        # concatenated to the 16-dim multivector before projection. 0 = kinematics only.
+        self.num_extra_features = num_extra_features
+        self.proj = nn.Linear(16 + num_extra_features, embed_dim)
         self.ragged_pair_embed = ragged_pair_embed
         embed_cls = RaggedInteractionEmbedding if ragged_pair_embed else InteractionEmbedding
         self.interaction_embed = embed_cls(
@@ -47,7 +51,8 @@ class LorentzParTEncoder(nn.Module):
             ) for _ in range(num_layers)
         ])
     
-    def forward(self, x: Tensor, padding_mask: Tensor, U: Tensor) -> Tensor:
+    def forward(self, x: Tensor, padding_mask: Tensor, U: Tensor,
+                extras: Optional[Tensor] = None) -> Tensor:
         B, N, F = x.shape  # (batch_size, max_num_particles, 16)
 
         # Embed interaction features
@@ -62,6 +67,10 @@ class LorentzParTEncoder(nn.Module):
         x = x.view(B, N, 1, F)
         x, _ = self.equilinear(x)  # (B, N, 1, 16)
         x = x.view(B, N, 16)
+
+        # Concatenate extra per-particle scalar features (track displacement, ...) if present
+        if self.num_extra_features > 0 and extras is not None:
+            x = torch.cat([x, extras], dim=-1)  # (B, N, 16 + num_extra_features)
 
         # Project input features to embedding dimension
         x = self.proj(x)  # (B, N, embed_dim)
@@ -158,7 +167,8 @@ class LorentzParT(nn.Module):
         mask: Optional[bool] = None,
         weights: Optional[str] = None,
         inference: Optional[bool] = False,
-        ragged_pair_embed: Optional[bool] = None
+        ragged_pair_embed: Optional[bool] = None,
+        num_extra_features: Optional[int] = None
     ):
         super(LorentzParT, self).__init__()
 
@@ -189,6 +199,7 @@ class LorentzParT(nn.Module):
             self.inference = inference if inference is not None else config.inference
             self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else getattr(config, 'ragged_pair_embed', False)
             self.pad_fill_zero = getattr(config, 'pad_fill_zero', False)
+            self.num_extra_features = num_extra_features if num_extra_features is not None else getattr(config, 'num_extra_features', 0)
         else:
             self.max_num_particles = max_num_particles if max_num_particles is not None else 128
             self.num_particle_features = num_particle_features if num_particle_features is not None else 4
@@ -215,6 +226,7 @@ class LorentzParT(nn.Module):
             self.inference = inference if inference is not None else False
             self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else False
             self.pad_fill_zero = False
+            self.num_extra_features = num_extra_features if num_extra_features is not None else 0
 
         # Initialize the class token
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim), requires_grad=True)
@@ -230,7 +242,8 @@ class LorentzParT(nn.Module):
             dropout=self.dropout,
             expansion_factor=self.expansion_factor,
             pair_embed_dims=self.pair_embed_dims,
-            ragged_pair_embed=self.ragged_pair_embed
+            ragged_pair_embed=self.ragged_pair_embed,
+            num_extra_features=self.num_extra_features
         )
 
         # For self-supervised learning
@@ -274,6 +287,12 @@ class LorentzParT(nn.Module):
     def forward(self, x: Tensor, mask_idx: Optional[Tensor] = None) -> Tensor:
         B, N, F = x.shape  # (batch_size, max_num_particles, num_particle_features)
 
+        # Split kinematic 4-vector (first 4 cols) from extra scalar features (e.g. d0/dz).
+        # The processor and interaction features use only the 4-vector; the extras are
+        # concatenated inside the encoder before projection.
+        extras = x[..., 4:] if self.num_extra_features > 0 else None
+        x = x[..., :4]
+
         # Ignore padding particles in query
         padding_mask = (x[..., 3] == 0).float()  # (B, N)
 
@@ -286,7 +305,7 @@ class LorentzParT(nn.Module):
         x, U = self.processor(x)
 
         # Pass through equilinear layer and particle attention blocks
-        x = self.encoder(x, padding_mask, U)
+        x = self.encoder(x, padding_mask, U, extras)
 
         # Classification (no masking in this case)
         if not self.mask:

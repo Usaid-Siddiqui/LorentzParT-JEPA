@@ -29,14 +29,17 @@ def is_frozen(protocol: str) -> bool:
     return protocol in ('linear', 'pool')
 
 
-def build_model(protocol: str, num_classes: int, encoder_weights=None):
-    """Return a model for (protocol, k). encoder_weights=None → scratch/random."""
+def build_model(protocol: str, num_classes: int, encoder_weights=None, num_extra_features: int = 0):
+    """Return a model for (protocol, k). encoder_weights=None → scratch/random.
+    num_extra_features > 0 (finetune only) adds extra per-particle scalar inputs
+    (e.g. 4 track-displacement features) beyond the 4-vector — the input-ceiling test."""
     if protocol == 'finetune':
         return LorentzParT(
             num_classes=num_classes,
             weights=encoder_weights,        # LorentzParT filters encoder.* internally; None → random
             ragged_pair_embed=True,
             mask=False,
+            num_extra_features=num_extra_features,
         )
     if protocol == 'linear':
         return LinearProbeModel(

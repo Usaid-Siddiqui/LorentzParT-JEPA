@@ -70,6 +70,9 @@ def parse_args():
     p.add_argument('--finetune-config', default='configs/train_lorentz_part_ragged.yaml')
     p.add_argument('--probe-epochs', type=int, default=20)
     p.add_argument('--probe-lr', type=float, default=1e-3)
+    p.add_argument('--num-extra-features', type=int, default=0,
+                   help='Extra per-particle scalar features beyond the 4-vector (finetune only, '
+                        'e.g. 4 for track displacement). Data dir must supply them.')
     p.add_argument('--batch-size', type=int, default=1000)
     p.add_argument('--num-workers', type=int, default=4)
     return p.parse_args()
@@ -140,7 +143,8 @@ def run_finetune(args, task_cfg, k, device):
     val_ds   = make_dataset('val',   args.data_dir, task_cfg['classes'], None)
     test_ds  = make_dataset('test',  args.data_dir, task_cfg['classes'], None)
 
-    model = protocols.build_model('finetune', k, encoder_weights=args.weights).to(device)
+    model = protocols.build_model('finetune', k, encoder_weights=args.weights,
+                                  num_extra_features=args.num_extra_features).to(device)
     with open(args.finetune_config) as f:
         train_cfg = TrainConfig.from_dict(yaml.safe_load(f)['train'])
     trainer = JetClassTrainer(model=model, train_dataset=train_ds, val_dataset=val_ds,
@@ -152,7 +156,8 @@ def run_finetune(args, task_cfg, k, device):
     cleanup_ddp()
 
     # evaluate the best checkpoint on the test set with the k-class metrics
-    eval_model = protocols.build_model('finetune', k, encoder_weights=None).to(device)
+    eval_model = protocols.build_model('finetune', k, encoder_weights=None,
+                                       num_extra_features=args.num_extra_features).to(device)
     eval_model.load_state_dict(torch.load(best_path, map_location=device))
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False,
                              num_workers=args.num_workers)
