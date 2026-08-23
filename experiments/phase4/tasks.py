@@ -20,6 +20,7 @@ TASKS = {
     'wz':        {'classes': [6, 7],          'kind': 'binary',     'signal': 7},  # W→qq vs Z→qq (W = signal)
     'higgs_had': {'classes': [1, 2, 3],       'kind': 'multiclass'},               # H→ bb/cc/gg
     'higgs5':    {'classes': [1, 2, 3, 4, 5], 'kind': 'multiclass'},               # H→ bb/cc/gg/4q/lνqq
+    'full10':    {'classes': list(range(10)), 'kind': 'multiclass'},               # all 10 (Phase-2 headline analog)
 }
 
 

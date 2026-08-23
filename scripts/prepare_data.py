@@ -20,6 +20,7 @@ Output: numpy .npy files in <output-dir>/{train,val,test}/
 
 import os
 import glob
+import json
 import argparse
 import numpy as np
 import sys
@@ -29,6 +30,8 @@ from src.utils.data.dataloader import read_file
 
 KINEMATIC = ['part_pt', 'part_eta', 'part_phi', 'part_energy']
 DISPLACEMENT = ['part_d0val', 'part_d0err', 'part_dzval', 'part_dzerr']  # track impact params
+PID = ['part_charge', 'part_isChargedHadron', 'part_isNeutralHadron',   # particle identity
+       'part_isPhoton', 'part_isElectron', 'part_isMuon']
 
 
 # Maps class index → source ROOT filename prefix in val_5M.
@@ -61,9 +64,12 @@ def parse_args():
     parser.add_argument("--max-particles", type=int, default=128,
                         help="Maximum number of particles per jet")
     parser.add_argument("--with-displacement", action="store_true",
-                        help="Also extract the 4 track-displacement features (d0/dz val+err) → "
-                             "(N, 8, 128); they are standardized (train stats) with padded rows zeroed. "
-                             "Train the model with --num-extra-features 4.")
+                        help="Also extract the 4 track-displacement features (d0/dz val+err); "
+                             "they are standardized (train stats) with padded rows zeroed.")
+    parser.add_argument("--with-pid", action="store_true",
+                        help="Also extract the 6 PID features (charge + isChargedHadron/"
+                             "NeutralHadron/Photon/Electron/Muon); left raw (charge∈{-1,0,1}, "
+                             "flags∈{0,1}), padded rows already zero.")
     return parser.parse_args()
 
 
@@ -111,7 +117,13 @@ def main():
     print(f"Split: {args.train_per_class} train / {args.val_per_class} val / "
           f"{args.test_per_class} test per class\n")
 
-    feats = KINEMATIC + (DISPLACEMENT if args.with_displacement else [])
+    feats = (KINEMATIC
+             + (DISPLACEMENT if args.with_displacement else [])
+             + (PID if args.with_pid else []))
+    n_disp = 4 if args.with_displacement else 0
+    n_pid = 6 if args.with_pid else 0
+    n_extra = n_disp + n_pid
+    disp_cols = list(range(4, 4 + n_disp))   # only displacement is standardized; PID stays raw
 
     tr, va = args.train_per_class, args.val_per_class
     for class_idx, prefix in CLASS_PREFIXES.items():
@@ -127,12 +139,13 @@ def main():
 
     # Displacement features: standardize with TRAIN stats over valid particles, then
     # zero padded rows so padded particles stay all-zero (padding = zero-energy convention).
+    # PID features are left raw (categorical) and stay 0 in padded rows already.
     disp_mean = disp_std = None
-    if args.with_displacement:
-        Xtr = np.concatenate(all_train_x, axis=0)          # (N, 8, 128)
+    if n_disp:
+        Xtr = np.concatenate(all_train_x, axis=0)          # (N, 4+n_extra, 128)
         valid = Xtr[:, 3, :] > 0                            # energy>0 → real particle
         disp_mean, disp_std = [], []
-        for f in range(4, 8):
+        for f in disp_cols:
             v = Xtr[:, f, :][valid]
             disp_mean.append(float(v.mean())); disp_std.append(float(v.std()) + 1e-6)
         print("\nDisplacement standardization (train stats):")
@@ -141,7 +154,7 @@ def main():
 
     def standardize(X):
         valid = X[:, 3, :] > 0
-        for j, f in enumerate(range(4, 8)):
+        for j, f in enumerate(disp_cols):
             X[:, f, :] = (X[:, f, :] - disp_mean[j]) / disp_std[j]
             col = X[:, f, :]; col[~valid] = 0.0
         return X
@@ -154,7 +167,7 @@ def main():
     ]:
         X = np.concatenate(x_list, axis=0)
         Y = np.concatenate(y_list, axis=0)
-        if args.with_displacement:
+        if n_disp:
             X = standardize(X)
         perm = rng.permutation(len(X))
         X, Y = X[perm], Y[perm]
@@ -166,6 +179,18 @@ def main():
         print(f"\n{split_name:5s}: {len(X):7d} jets  "
               f"| particles {X.shape}  | labels {Y.shape}")
         print(f"       Saved to {out_dir}/")
+
+    # Record the feature layout so training scripts can't silently mismatch channels.
+    with open(os.path.join(args.output_dir, "features.json"), "w") as f:
+        json.dump({
+            "features": feats,
+            "num_channels": len(feats),
+            "num_extra_features": n_extra,   # pass to --num-extra-features
+            "kinematic": 4, "displacement": n_disp, "pid": n_pid,
+        }, f, indent=2)
+    print(f"\nFeature layout ({len(feats)} channels, num_extra_features={n_extra}): "
+          f"{feats}")
+    print(f"  Wrote {os.path.join(args.output_dir, 'features.json')}")
 
     print("\nDone. Class distribution (train set):")
     Y_train = np.concatenate(all_train_y, axis=0)

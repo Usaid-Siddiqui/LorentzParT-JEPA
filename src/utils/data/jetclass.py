@@ -124,7 +124,7 @@ class NpyJetClassDataset(Dataset):
         return masked_particles, masked_targets, mask_idx   # mask_idx shape: (K,)
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, ...]:
-        part = self.X_particles[idx].T.copy()   # (128, 4)
+        part = self.X_particles[idx].T.copy()   # (128, 4 + num_extra_features)
         label = self.y[idx]
 
         if self.mask_mode is not None:
@@ -133,6 +133,10 @@ class NpyJetClassDataset(Dataset):
             )
             self._apply_norm(masked_particles)
             self._apply_norm(masked_targets)
+            # The reconstruction target is the 4-vector only — extra features (Phase 6:
+            # displacement + PID) are encoder inputs, not reconstruction targets. The
+            # masked particle in `masked_particles` keeps all channels (all zeroed).
+            masked_targets = masked_targets[:, :4]
             # masked_targets: (K, 4). Squeeze to (4,) only for K=1 (MAE compat);
             # keep (K, 4) for K>1 so the batch collates to (B, K, 4).
             targets = masked_targets.squeeze(0) if masked_targets.shape[0] == 1 else masked_targets

@@ -1,0 +1,60 @@
+# Phase 6 — MAE pretraining on the FULL-INFORMATION input (4-vector + 10 extra scalars:
+# 4 track-displacement + 6 PID). Identical to configs/pretrain_mae_1m_ragged.yaml except
+# num_extra_features: 10. The encoder SEES all features but the reconstruction pretext stays
+# the 4-momentum only (conservation, E²=p²+m²) — extras are inputs, not targets — so MAE
+# stays comparable to its 4-vector self. Build data with
+#   scripts/prepare_data.py --with-displacement --with-pid
+
+model:
+  name: lorentz_part
+  max_num_particles: 128
+  num_particle_features: 4
+  num_extra_features: 10        # 4 displacement + 6 PID, concatenated into the encoder proj
+  num_classes: 10
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  num_cls_layers: 2
+  num_mlp_layers: 0
+  hidden_dim: 256
+  hidden_mv_channels: 8
+  in_s_channels: null
+  out_s_channels: null
+  hidden_s_channels: 16
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  ragged_pair_embed: true
+  mask: true
+  mask_mode: biased
+  weights: null
+
+train:
+  batch_size: 1000
+  criterion:
+    name: conservation_loss
+  optimizer:
+    name: radam
+    lr: 0.001
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.00001
+  callbacks:
+    - name: early_stopping
+      patience: 7
+      min_delta: 0.0001
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true

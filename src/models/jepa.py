@@ -94,6 +94,7 @@ class ParticleJEPA(nn.Module):
         use_attention_gate: bool = True,
         ragged_pair_embed: bool = False,
         pad_fill_zero: bool = False,
+        num_extra_features: int = 0,
     ):
         super().__init__()
 
@@ -102,6 +103,10 @@ class ParticleJEPA(nn.Module):
 
         self.ema_momentum = ema_momentum
         self.use_attention_gate = use_attention_gate
+        # Extra per-particle scalars beyond the 4-vector (Phase 6: 4 displacement + 6 PID).
+        # They ride alongside the multivector into the encoder proj; the processor and
+        # interaction matrix still use only the 4-vector, preserving the equivariance nudge.
+        self.num_extra_features = num_extra_features
 
         # Shared processor: computes multivectors + pairwise interaction features
         self.processor = ParticleProcessor(to_multivector=True, pad_fill=0.0 if pad_fill_zero else -1e9)
@@ -115,6 +120,7 @@ class ParticleJEPA(nn.Module):
             expansion_factor=expansion_factor,
             pair_embed_dims=pair_embed_dims,
             ragged_pair_embed=ragged_pair_embed,
+            num_extra_features=num_extra_features,
         )
 
         # Attention gate: soft per-particle importance weighting from U
@@ -165,8 +171,10 @@ class ParticleJEPA(nn.Module):
         """
         Parameters
         ----------
-        x : Tensor, shape (B, N, 4)
-            Particle features [pT, η, φ, E] for each jet, zero-padded.
+        x : Tensor, shape (B, N, 4 + num_extra_features)
+            Particle features per jet, zero-padded. The first 4 columns are the
+            4-vector [pT, η, φ, E]; any remaining columns are extra per-particle
+            scalars (Phase 6: displacement + PID) that ride into the encoder proj.
         mask_idx : Tensor, shape (B,), dtype long
             Index of the particle to mask in each jet.
 
@@ -177,7 +185,7 @@ class ParticleJEPA(nn.Module):
         target_embed : Tensor, shape (B, embed_dim)
             Target encoder's embedding at the masked position (detached).
         """
-        B, N, F = x.shape
+        B, N, Fin = x.shape
         device = x.device
         batch_idx = torch.arange(B, device=device)
 
@@ -187,40 +195,50 @@ class ParticleJEPA(nn.Module):
             mask_idx = mask_idx.unsqueeze(1)   # (B,) → (B, 1)
         K = mask_idx.shape[1]                  # number of masked particles
 
+        # ---------- Split 4-vector from extra scalars ----------
+        # Processor + interaction matrix use only the 4-vector; extras (if any) are
+        # concatenated inside the encoder proj. E=0 → identical to the 4-vector path.
+        E = self.num_extra_features
+        full_extras = x[..., 4:] if E > 0 else None
+        x4 = x[..., :4]
+
         # ---------- Build padding masks ----------
         # Valid particles: energy > 0  →  padding_mask = 0 (attend)
         # Padding particles: energy == 0  →  padding_mask = 1 (ignore)
-        full_padding_mask = (x[..., 3] == 0).float()   # (B, N)
+        full_padding_mask = (x4[..., 3] == 0).float()   # (B, N)
 
-        # Zero out all K masked particles; keep their padding_mask = 0
-        # so the encoder knows a particle exists at those positions
-        masked_x = x.clone()
+        # Zero out all K masked particles (4-vector AND extras); keep their
+        # padding_mask = 0 so the encoder knows a particle exists at those positions
+        masked_x4 = x4.clone()
+        masked_extras = full_extras.clone() if E > 0 else None
         context_padding_mask = full_padding_mask.clone()
         for k in range(K):
-            masked_x[batch_idx, mask_idx[:, k]] = 0.0
+            masked_x4[batch_idx, mask_idx[:, k]] = 0.0
+            if E > 0:
+                masked_extras[batch_idx, mask_idx[:, k]] = 0.0
             context_padding_mask[batch_idx, mask_idx[:, k]] = 0.0
 
         # ---------- Process inputs ----------
-        full_mv, U_full = self.processor(x)
-        context_mv, U_context = self.processor(masked_x)
+        full_mv, U_full = self.processor(x4)
+        context_mv, U_context = self.processor(masked_x4)
 
         # ---------- Attention gate (optional) ----------
         if self.use_attention_gate:
             # Valid context particles: energy > 0. Excludes padding AND the masked
             # targets (both appear as -1e9 pairs in U_context), so the gate pools
             # only over real neighbours instead of saturating on the padding fill.
-            gate_valid = masked_x[..., 3] > 0        # (B, N)
+            gate_valid = masked_x4[..., 3] > 0        # (B, N)
             gate = self.attention_gate(U_context, gate_valid)   # (B, N, 1)
             context_mv = context_mv * gate                       # (B, N, 16)
 
         # ---------- Target encoder (no gradient) ----------
         with torch.no_grad():
-            target_out = self.target_encoder(full_mv, full_padding_mask, U_full)
+            target_out = self.target_encoder(full_mv, full_padding_mask, U_full, full_extras)
             # Extract K target embeddings per jet: (B, K, embed_dim)
             target_embed = target_out[batch_idx.unsqueeze(1), mask_idx]
 
         # ---------- Context encoder (trainable) ----------
-        context_out = self.context_encoder(context_mv, context_padding_mask, U_context)
+        context_out = self.context_encoder(context_mv, context_padding_mask, U_context, masked_extras)
 
         # ---------- Predictor ----------
         predicted_embed = self.predictor(context_out, mask_idx)   # (B, K, embed_dim)

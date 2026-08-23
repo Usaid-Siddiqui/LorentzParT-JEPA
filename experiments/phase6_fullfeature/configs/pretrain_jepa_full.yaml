@@ -1,0 +1,59 @@
+# Phase 6 — JEPA pretraining on the FULL-INFORMATION input (4-vector + 10 extra scalars:
+# 4 track-displacement + 6 PID). Identical to configs/pretrain_jepa_biased_1m_ragged.yaml
+# except num_extra_features: 10 (the extras ride into the encoder proj; the Lorentz
+# processor + interaction matrix still use only the 4-vector). Build data with
+#   scripts/prepare_data.py --with-displacement --with-pid  (writes features.json, num_extra_features=10)
+
+model:
+  name: particle_jepa
+  max_num_particles: 128
+  num_particle_features: 4      # 4-vector drives the processor; extras are separate
+  num_extra_features: 10        # 4 displacement + 6 PID, concatenated into the encoder proj
+  embed_dim: 128
+  num_heads: 8
+  num_layers: 8
+  dropout: 0.1
+  expansion_factor: 4
+  pair_embed_dims: [64, 64, 64]
+  ragged_pair_embed: true
+
+  predictor:
+    predictor_dim: 64
+    num_heads: 4
+    num_layers: 4
+    dropout: 0.1
+
+  jepa:
+    ema_momentum_start: 0.999
+    ema_momentum_end: 1.0
+    use_attention_gate: true
+    num_mask: 1
+    mask_mode: biased
+
+train:
+  batch_size: 1000
+  criterion:
+    name: embedding_loss
+    embed_dim: 128
+  optimizer:
+    name: radam
+    lr: 0.0003
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.000003
+  callbacks: []          # JEPA trains the full schedule (see 1m_ragged config for why)
+  num_epochs: 30
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 50
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 8
+  pin_memory: true
