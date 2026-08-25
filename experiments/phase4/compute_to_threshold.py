@@ -65,6 +65,8 @@ def load_curve(path):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--logging-dir', default='logs/LorentzParT/logging')
+    p.add_argument('--tasks', nargs='+', default=list(T.TASKS), choices=list(T.TASKS),
+                   help="subset of tasks to aggregate (default all; Phase 6 ran full10 hbb_hcc wz)")
     p.add_argument('--seeds', nargs='+', type=int, default=[42, 123, 456])
     p.add_argument('--target-frac', type=float, default=0.95,
                    help="target = frac × per-task mean final val accuracy")
@@ -80,7 +82,7 @@ def main():
     # ── load every curve, report what columns were detected ──────────────────
     curves = {}           # (task, enc, seed) -> (val, elapsed)
     detected = None
-    for task in T.TASKS:
+    for task in args.tasks:
         for enc in ENCODERS:
             for s in args.seeds:
                 c = load_curve(path(task, enc, s))
@@ -116,7 +118,7 @@ def main():
     print(f"{'task':12}{'target':>8}   " + "".join(f"{e:>16}" for e in ENCODERS)
           + f"{'jepa saves':>12}{'mae saves':>11}")
     cum = {e: [] for e in ENCODERS}
-    for task in T.TASKS:
+    for task in args.tasks:
         target, out = compute_to_target(task)
         row = f"{task:12}{target:>8.3f}   "
         means = {}
@@ -131,7 +133,7 @@ def main():
         row += f"{js:>11.0f}%{ms:>10.0f}%"
         print(row)
 
-    xs = np.arange(1, len(T.TASKS) + 1)
+    xs = np.arange(1, len(args.tasks) + 1)
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.plot(xs, np.cumsum(cum['scratch']), 'o-', color='0.4', label='scratch (N finetunes)')
     for enc, col in [('jepa', 'C0'), ('mae', 'C1')]:
