@@ -174,6 +174,7 @@ class RaggedInteractionEmbedding(nn.Module):
         idx = valid_pairs.reshape(-1).nonzero(as_tuple=True)[0]   # (M,) valid-pair rows
         sel = flat.index_select(0, idx).t().unsqueeze(0)         # (1, F, M) -> Conv1d over M pairs
         h = self.embed(sel).squeeze(0).t()                       # (M, out_dim)
-        out = flat.new_zeros(B * N * N, self.out_dim).index_copy(0, idx, h)
+        # dtype=h.dtype so the scatter target matches the (possibly bf16 under autocast) embedding
+        out = flat.new_zeros(B * N * N, self.out_dim, dtype=h.dtype).index_copy(0, idx, h)
         # (B, N, N, H) -> (B, H, N, N) -> (B * H, N, N), matching InteractionEmbedding
         return out.view(B, N, N, self.out_dim).permute(0, 3, 1, 2).reshape(B * self.out_dim, N, N)

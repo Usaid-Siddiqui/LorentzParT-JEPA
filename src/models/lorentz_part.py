@@ -68,9 +68,10 @@ class LorentzParTEncoder(nn.Module):
         x, _ = self.equilinear(x)  # (B, N, 1, 16)
         x = x.view(B, N, 16)
 
-        # Concatenate extra per-particle scalar features (track displacement, ...) if present
+        # Concatenate extra per-particle scalar features (track displacement, ...) if present.
+        # extras.to(x.dtype): x may be bf16 under autocast while extras is fp32 → align for cat.
         if self.num_extra_features > 0 and extras is not None:
-            x = torch.cat([x, extras], dim=-1)  # (B, N, 16 + num_extra_features)
+            x = torch.cat([x, extras.to(x.dtype)], dim=-1)  # (B, N, 16 + num_extra_features)
 
         # Project input features to embedding dimension
         x = self.proj(x)  # (B, N, embed_dim)

@@ -95,9 +95,10 @@ class ParticleTransformerEncoder(nn.Module):
         else:
             U = self.interaction_embed(U)  # (B * num_heads, N, N)
 
-        # Concatenate extra per-particle scalar features (displacement / PID) if present
+        # Concatenate extra per-particle scalar features (displacement / PID) if present.
+        # extras.to(x.dtype) aligns dtypes for the cat under autocast (harmless when both fp32).
         if self.num_extra_features > 0 and extras is not None:
-            x = torch.cat([x, extras], dim=-1)  # (B, N, 4 + num_extra_features)
+            x = torch.cat([x, extras.to(x.dtype)], dim=-1)  # (B, N, 4 + num_extra_features)
 
         # Project input features to embedding dimension
         x = self.proj(x)  # (B, N, embed_dim)
