@@ -35,6 +35,7 @@ import torch.nn as nn
 from torch import Tensor
 
 from .lorentz_part import LorentzParTEncoder
+from .particle_transformer import ParticleTransformerEncoder
 from .predictor import ParticlePredictor
 from .processor import ParticleProcessor
 from .attention_gate import AttentionGate
@@ -95,6 +96,7 @@ class ParticleJEPA(nn.Module):
         ragged_pair_embed: bool = False,
         pad_fill_zero: bool = False,
         num_extra_features: int = 0,
+        encoder_type: str = 'lorentz',
     ):
         super().__init__()
 
@@ -104,15 +106,24 @@ class ParticleJEPA(nn.Module):
         self.ema_momentum = ema_momentum
         self.use_attention_gate = use_attention_gate
         # Extra per-particle scalars beyond the 4-vector (Phase 6: 4 displacement + 6 PID).
-        # They ride alongside the multivector into the encoder proj; the processor and
+        # They ride alongside the (multi)vector into the encoder proj; the processor and
         # interaction matrix still use only the 4-vector, preserving the equivariance nudge.
         self.num_extra_features = num_extra_features
+        # Backbone for the context/target encoders: 'lorentz' (hybrid, L-GATr multivector) or
+        # 'part' (vanilla ParT, raw 4-vector). Phase 7 compares both under JEPA.
+        if encoder_type not in ('lorentz', 'part'):
+            raise ValueError(f"encoder_type must be 'lorentz' or 'part', got {encoder_type!r}")
+        self.encoder_type = encoder_type
+        to_multivector = encoder_type == 'lorentz'
+        encoder_cls = LorentzParTEncoder if to_multivector else ParticleTransformerEncoder
 
-        # Shared processor: computes multivectors + pairwise interaction features
-        self.processor = ParticleProcessor(to_multivector=True, pad_fill=0.0 if pad_fill_zero else -1e9)
+        # Shared processor: 'lorentz' emits 16-dim multivectors, 'part' the raw 4-vector; both
+        # emit the same pairwise interaction matrix U.
+        self.processor = ParticleProcessor(to_multivector=to_multivector,
+                                           pad_fill=0.0 if pad_fill_zero else -1e9)
 
         # Context encoder (trainable)
-        self.context_encoder = LorentzParTEncoder(
+        self.context_encoder = encoder_cls(
             embed_dim=embed_dim,
             num_heads=num_heads,
             num_layers=num_layers,

@@ -23,6 +23,9 @@ class BaseModelConfig:
 @dataclass
 class ParticleTransformerConfig(BaseModelConfig):
     pair_embed_dims: List[int] = field(default_factory=lambda: [64, 64, 64])
+    mask_mode: str = 'random'
+    ragged_pair_embed: bool = False    # padding-aware interaction embedding (Phase 3 fix)
+    num_extra_features: int = 0        # per-particle scalars beyond the 4-vector (Phase 7: 4 disp + 6 PID)
 
     @classmethod
     def from_dict(cls, d: Dict):

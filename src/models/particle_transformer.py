@@ -5,7 +5,7 @@ from torch import nn, Tensor
 
 from .classifier import ClassAttentionBlock, Classifier
 from .feedforward import Feedforward
-from .processor import InteractionEmbedding, ParticleProcessor
+from .processor import InteractionEmbedding, RaggedInteractionEmbedding, ParticleProcessor
 from ..configs import ParticleTransformerConfig
 
 
@@ -59,11 +59,18 @@ class ParticleTransformerEncoder(nn.Module):
         num_layers: int = 8,
         dropout: float = 0.1,
         expansion_factor: int = 4,
-        pair_embed_dims: List[int] = [64, 64, 64]
+        pair_embed_dims: List[int] = [64, 64, 64],
+        ragged_pair_embed: bool = False,
+        num_extra_features: int = 0
     ):
         super(ParticleTransformerEncoder, self).__init__()
-        self.proj = nn.Linear(4, embed_dim)
-        self.interaction_embed = InteractionEmbedding(
+        # Extra per-particle scalar features (displacement / PID) are concatenated to the
+        # 4-vector before projection. 0 = 4-vector only (backward-compatible).
+        self.num_extra_features = num_extra_features
+        self.proj = nn.Linear(4 + num_extra_features, embed_dim)
+        self.ragged_pair_embed = ragged_pair_embed
+        embed_cls = RaggedInteractionEmbedding if ragged_pair_embed else InteractionEmbedding
+        self.interaction_embed = embed_cls(
             num_interaction_features=4,
             pair_embed_dims=pair_embed_dims + [num_heads]
         )
@@ -75,12 +82,22 @@ class ParticleTransformerEncoder(nn.Module):
                 expansion_factor=expansion_factor
             ) for _ in range(num_layers)
         ])
-    
-    def forward(self, x: Tensor, padding_mask: Tensor, U: Tensor) -> Tensor:
+
+    def forward(self, x: Tensor, padding_mask: Tensor, U: Tensor,
+                extras: Optional[Tensor] = None) -> Tensor:
         B, N, F = x.shape  # (batch_size, max_num_particles, num_particle_features)
 
-        # Embed interaction features
-        U = self.interaction_embed(U)  # (B * num_heads, N, N)
+        # Embed interaction features (padding-aware when ragged)
+        if self.ragged_pair_embed:
+            valid = padding_mask == 0  # (B, N) True where non-padding (masked particles count as valid)
+            valid_pairs = valid[:, :, None] & valid[:, None, :]  # (B, N, N)
+            U = self.interaction_embed(U, valid_pairs)  # (B * num_heads, N, N)
+        else:
+            U = self.interaction_embed(U)  # (B * num_heads, N, N)
+
+        # Concatenate extra per-particle scalar features (displacement / PID) if present
+        if self.num_extra_features > 0 and extras is not None:
+            x = torch.cat([x, extras], dim=-1)  # (B, N, 4 + num_extra_features)
 
         # Project input features to embedding dimension
         x = self.proj(x)  # (B, N, embed_dim)
@@ -154,7 +171,9 @@ class ParticleTransformer(nn.Module):
         pair_embed_dims: Optional[List[int]] = None,
         mask: Optional[bool] = None,
         weights: Optional[str] = None,
-        inference: Optional[bool] = False
+        inference: Optional[bool] = False,
+        ragged_pair_embed: Optional[bool] = None,
+        num_extra_features: Optional[int] = None
     ):
         super(ParticleTransformer, self).__init__()
 
@@ -175,6 +194,8 @@ class ParticleTransformer(nn.Module):
             self.mask = mask if mask is not None else config.mask
             self.weights = weights if weights is not None else config.weights
             self.inference = inference if inference is not None else config.inference
+            self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else getattr(config, 'ragged_pair_embed', False)
+            self.num_extra_features = num_extra_features if num_extra_features is not None else getattr(config, 'num_extra_features', 0)
         else:
             self.max_num_particles = max_num_particles if max_num_particles is not None else 128
             self.num_particle_features = num_particle_features if num_particle_features is not None else 4
@@ -191,6 +212,8 @@ class ParticleTransformer(nn.Module):
             self.mask = mask if mask is not None else False
             self.weights = weights if weights is not None else None
             self.inference = inference if inference is not None else False
+            self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else False
+            self.num_extra_features = num_extra_features if num_extra_features is not None else 0
 
         # Initialize the class token
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim), requires_grad=True)
@@ -203,7 +226,9 @@ class ParticleTransformer(nn.Module):
             num_layers=self.num_layers,
             dropout=self.dropout,
             expansion_factor=self.expansion_factor,
-            pair_embed_dims=self.pair_embed_dims
+            pair_embed_dims=self.pair_embed_dims,
+            ragged_pair_embed=self.ragged_pair_embed,
+            num_extra_features=self.num_extra_features
         )
 
         # For self-supervised learning
@@ -241,6 +266,11 @@ class ParticleTransformer(nn.Module):
     def forward(self, x: Tensor, mask_idx: Optional[Tensor] = None) -> Tensor:
         B, N, F = x.shape  # (batch_size, max_num_particles, num_particle_features)
 
+        # Split kinematic 4-vector from extra scalar features (displacement / PID). The processor
+        # and interaction features use only the 4-vector; extras are concatenated in the encoder.
+        extras = x[..., 4:] if self.num_extra_features > 0 else None
+        x = x[..., :4]
+
         # Ignore padding particles in query
         padding_mask = (x[..., 3] == 0).float()  # (B, N)
 
@@ -249,11 +279,11 @@ class ParticleTransformer(nn.Module):
             batch_indices = torch.arange(x.size(0), device=x.device)
             padding_mask[batch_indices, mask_idx] = 0.0
 
-        # Process particles to get interaction embeddings and multivectors (if applicable)
+        # Process particles to get interaction embeddings
         x, U = self.processor(x)
 
-        # Pass through equilinear layer and particle attention blocks
-        x = self.encoder(x, padding_mask, U)
+        # Particle attention blocks (extras concatenated before projection inside the encoder)
+        x = self.encoder(x, padding_mask, U, extras)
 
         # Classification (no masking in this case)
         if not self.mask:
