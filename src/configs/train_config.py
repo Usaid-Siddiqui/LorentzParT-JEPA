@@ -19,6 +19,10 @@ class TrainConfig:
     device: str = None
     num_workers: int = 0
     pin_memory: bool = False
+    # Phase 7 streaming / scale knobs (ignored by map-style datasets when unset)
+    steps_per_epoch: int = None   # optimizer steps per epoch for IterableDataset (None = full pass)
+    val_steps: int = None         # cap validation batches per epoch (None = full val set)
+    amp: str = None               # 'bf16' | 'fp16' | None (mixed-precision autocast)
 
     @classmethod
     def from_dict(cls, d: dict):

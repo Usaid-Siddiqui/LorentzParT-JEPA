@@ -1,0 +1,38 @@
+# Phase 7 supervised recipe — used by protocol=scratch AND protocol=jepa_finetune.
+# Streaming: an "epoch" = steps_per_epoch optimizer steps (per GPU). Jets/epoch =
+# batch_size * world_size * steps_per_epoch. Tune steps_per_epoch/num_epochs PER SCALE via
+# run_phase7.py overrides after calibrating one 1M-epoch on the real 2xH100 (see README §6).
+# Architecture is fixed in train_phase7.py (embed 128 / 8 heads / 8 layers / 2 cls) for parity.
+
+train:
+  batch_size: 256                # per GPU; global = 256 * num_gpus
+  criterion:
+    name: cross_entropy_loss
+  optimizer:
+    name: radam
+    lr: 0.0005
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30                    # keep == num_epochs
+    eta_min: 0.000001
+  callbacks:
+    - name: early_stopping
+      patience: 10
+      min_delta: 0.0005
+  num_epochs: 30
+  steps_per_epoch: 2000          # ~1M jets/epoch at batch 256 x 2 GPUs; scale this up for 100M
+  val_steps: 100                 # cap val to 100 batches/epoch (streamed 5M val)
+  amp: bf16                      # H100/A100 throughput; fp32 if unstable
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 100
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 6
+  pin_memory: true

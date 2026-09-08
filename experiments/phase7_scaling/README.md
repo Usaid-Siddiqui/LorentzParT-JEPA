@@ -193,13 +193,19 @@ spend the 100M budget. Given 2 GPUs, keep multi-seed error bars at ≤10M; run *
 |---|---|---|---|
 | **M1** | `ParticleTransformer` + `num_extra_features` + `ragged_pair_embed` (proj `Linear(4+E,…)`, 4-vec/extras split, padding-aware embedding) | vanilla ParT ingests the full 14 features; both backbones share the ragged embedding | ✅ **DONE + smoke-tested** |
 | **M2** | `ParticleJEPA` **encoder-pluggable** via `encoder_type='part'\|'lorentz'` (part → `ParticleTransformerEncoder`, `to_multivector=False`, gate over the 4-vec) | build **ParT + JEPA** | ✅ **DONE + smoke-tested** |
-| **M3** | weaver reader adapter (batch dict → our `(B,N,14)`) + bf16 autocast + resumable step-checkpointing in the trainers | any run ≥ 10M | ☐ next (validate on val_5M) |
-| **M4** | `torchrun`/2-GPU launch wrappers + config plumbing for scale/features | orchestrate the sweep | ☐ |
+| **M3** | streaming loader (own, not weaver) + `IterableDataset` trainer branch + step-epochs + bf16 autocast + capped streaming val; resumability via per-(step-)epoch checkpoints | any run ≥ 10M | ✅ **DONE** (loader validated on val_5M; trainer plumbing CPU-tested) |
+| **M4** | `train_phase7.py` (torchrun entry, all 4 cells), 2 train-recipe configs, `run_phase7.py` orchestrator (JEPA two-stage, resumable) | orchestrate the 2×2 sweep | ✅ **DONE** (syntax + config + mask-contract tested) |
 
-M1/M2 (the gating model changes) are complete and verified on CPU: ParT full-feature + ragged,
-ParT+JEPA fwd/bwd with correct grad routing, the pretrain→finetune checkpoint handoff, and **encoder
-parity at 0.10%** (ParT 1.608M vs LorentzParT 1.609M with full features). M3 gates the data scale —
-build + validate against `val_5M` before any 100M compute.
+All of M1–M4 are code-complete and verified as far as this no-GPU/no-ROOT box allows. **Cluster-only
+validations remaining before the headline runs:** (a) bf16 on real CUDA, (b) actual 2-GPU DDP,
+(c) JEPA-streaming end-to-end on real ROOT, (d) the throughput calibration (§6). Architecture parity
+holds at **0.10%** (ParT 1.608M vs LorentzParT 1.609M encoders, full features).
+
+Design notes: streaming uses **step-based epochs** (`steps_per_epoch`) — a full 100M pass is ~5 hr,
+so an "epoch" is a fixed number of optimizer steps; this makes the `len()`-less `IterableDataset`
+work, bounds checkpoint/validation cadence, and makes the existing per-epoch checkpointing double as
+**resumability** (resume restarts the current step-epoch; each reshuffles fresh data, so nothing is
+lost). Map-style datasets (phases 0–6) pass `steps_per_epoch=None` → behavior byte-identical.
 
 ---
 
@@ -234,3 +240,43 @@ build + validate against `val_5M` before any 100M compute.
 - **Cost control** — always climb the scale ladder; never launch 100M without the 10M trends in hand.
 - **Reproducibility** — fixed data-shard seed across cells; log exact feature set, recipe, and
   per-step throughput for the paper's compute table.
+
+## 11. Dual-GPU workflow (2×H100 / 2×A100-80GB)
+
+Each cell runs under `torchrun` on one node; the streaming loader shards internally by
+(rank × worker), so no `DistributedSampler` and identical code in 1- vs 2-GPU. Global batch =
+`batch_size` × 2. LR/`steps_per_epoch` are set for the *global* batch (scale LR if you change GPU count).
+
+**Step 0 — data** (once): `scripts/download_jetclass.py --split train/val`. Make the scale ladder as
+subdirectories of ROOT files (100k/1M/10M = fewer files per class; 100M = all).
+
+**Step 1 — validate the loader** on the real val set (done once):
+`python -m src.utils.data.streaming_jetclass /path/to/val_5M` → expect ~5000/class.
+
+**Step 2 — calibrate throughput** (before budgeting 100M): one short run on 2 GPUs at 1M, read the
+per-epoch seconds from the CSV, extrapolate ×100.
+```
+torchrun --standalone --nproc_per_node=2 experiments/phase7_scaling/train_phase7.py \
+  --model lorentzpart --protocol scratch --train-dir DATA/train_1M --val-dir DATA/val_5M \
+  --config experiments/phase7_scaling/configs/phase7_supervised.yaml \
+  --run-name calib_lorentzpart_1m --num-epochs 2 --steps-per-epoch 500 --seed 42
+```
+
+**Step 3 — climb the ladder** with the orchestrator (runs all 4 cells; JEPA cells auto pretrain→finetune):
+```
+# small scales for trends + error bars (cheap, 3 seeds), confirm ParT-scratch tracks published:
+python experiments/phase7_scaling/run_phase7.py --train-dir DATA/train_10M --val-dir DATA/val_5M \
+  --scale 10m --seeds 42 123 456 --nproc 2 --steps-per-epoch 6000 --num-epochs 15
+# headline endpoint (1 seed, more steps/epoch, fewer epochs):
+python experiments/phase7_scaling/run_phase7.py --train-dir DATA/train_100M --val-dir DATA/val_5M \
+  --scale 100m --seeds 42 --nproc 2 --steps-per-epoch 20000 --num-epochs 10
+```
+
+**Resumability / preemption:** every step-epoch writes a checkpoint
+(`logs/<Model>/checkpoints/<run>.pt`). To resume a killed run, the trainer's `load_checkpoint`
+restores model/opt/scheduler/epoch; re-invoking the same `run-name` cell is skipped once its `best/`
+checkpoint exists, so `run_phase7.py` is safe to re-run after a crash. Keep `logs/` on durable storage.
+
+**Monitoring:** per-epoch CSVs in `logs/<Model>/logging/<run>.csv` (val_metric / val_loss /
+elapsed_total_s). Reuse `experiments/plot_curves.py` for convergence and a per-scale accuracy table
+for the headline figure.

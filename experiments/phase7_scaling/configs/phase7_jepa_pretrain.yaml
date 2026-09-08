@@ -1,0 +1,35 @@
+# Phase 7 JEPA-pretrain recipe — protocol=jepa_pretrain (both part and lorentzpart backbones).
+# Mirrors the corrected phase-2/6 JEPA recipe (biased K=1 masking set in train_phase7.py; EMA
+# 0.999->1.0; no early stopping — JEPA trains the full schedule). Streaming epoch = steps_per_epoch
+# optimizer steps. Deploy the best-val encoder (<run>_best.pt) into jepa_finetune.
+
+train:
+  batch_size: 256
+  criterion:
+    name: embedding_loss
+    embed_dim: 128
+  optimizer:
+    name: radam
+    lr: 0.0003
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.000003
+  callbacks: []
+  num_epochs: 30
+  steps_per_epoch: 2000
+  val_steps: 100
+  amp: bf16
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 100
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 6
+  pin_memory: true

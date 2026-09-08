@@ -78,8 +78,9 @@ class JetClassTrainer(Trainer):
                 cb.on_train_begin(trainer=self)
 
             t_start = time.monotonic()
-            total_steps = self.num_epochs * len(self.train_loader)
-            start_step = self.start_epoch * len(self.train_loader)
+            steps_per_epoch = self._steps_per_epoch()
+            total_steps = self.num_epochs * steps_per_epoch
+            start_step = self.start_epoch * steps_per_epoch
             if self.progress_bar and self.rank == 0:
                 global_bar = tqdm(
                     total=total_steps,
@@ -94,9 +95,10 @@ class JetClassTrainer(Trainer):
                 global_bar = _NoOpBar()
 
             for epoch in range(self.start_epoch, self.num_epochs):
-                # Make DistributedSampler shuffle with a different seed each epoch
+                # Reshuffle each epoch: map-style DDP sampler and/or streaming dataset file order
                 if self._is_distributed and isinstance(self.train_loader.batch_sampler, JetClassDistributedSampler):
                     self.train_loader.batch_sampler.set_epoch(epoch)
+                self._maybe_set_epoch(epoch)
 
                 # Callback at the beginning of each epoch
                 for cb in self.callbacks:
@@ -109,14 +111,15 @@ class JetClassTrainer(Trainer):
                 running_count = 0
 
                 for batch_idx, (X, y) in enumerate(self.train_loader):
-                    step = epoch * len(self.train_loader) + batch_idx + 1
+                    step = epoch * steps_per_epoch + batch_idx + 1
 
                     X = X.to(self.device, non_blocking=self.pin_memory)
                     y = y.to(self.device, non_blocking=self.pin_memory)
 
                     self.optimizer.zero_grad()
-                    outputs = self.model(X)
-                    loss = self.criterion(outputs, y)
+                    with self._autocast():
+                        outputs = self.model(X)
+                        loss = self.criterion(outputs, y)
                     loss.backward()
                     self.optimizer.step()
                     bsz = y.size(0)
@@ -149,6 +152,10 @@ class JetClassTrainer(Trainer):
 
                     global_bar.update(1)
 
+                    # Streaming: an epoch is a fixed number of optimizer steps
+                    if self.steps_per_epoch is not None and (batch_idx + 1) >= self.steps_per_epoch:
+                        break
+
                 # Validation phase
                 self.model.eval()
                 val_loss_sum = 0.0
@@ -156,12 +163,13 @@ class JetClassTrainer(Trainer):
                 val_count = 0
 
                 with torch.no_grad():
-                    for X_val, y_val in self.val_loader:
+                    for val_idx, (X_val, y_val) in enumerate(self.val_loader):
                         X_val = X_val.to(self.device, non_blocking=self.pin_memory)
                         y_val = y_val.to(self.device, non_blocking=self.pin_memory)
 
-                        outputs_val = self.model(X_val)
-                        loss_val = self.criterion(outputs_val, y_val)
+                        with self._autocast():
+                            outputs_val = self.model(X_val)
+                            loss_val = self.criterion(outputs_val, y_val)
                         bsz = y_val.size(0)
                         val_loss_sum += float(loss_val.item()) * bsz
 
@@ -169,6 +177,10 @@ class JetClassTrainer(Trainer):
                             val_metric_sum += float(self.metric(outputs_val, y_val)) * bsz
 
                         val_count += bsz
+
+                        # Streaming: cap validation to a fixed number of batches per epoch
+                        if self.val_steps is not None and (val_idx + 1) >= self.val_steps:
+                            break
 
                 # Gather validation results from all processes
                 if self._is_distributed:

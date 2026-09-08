@@ -1,5 +1,6 @@
 import os
 import csv
+import contextlib
 from typing import List, Tuple, Dict, Callable, Optional, Union
 from datetime import datetime
 
@@ -15,7 +16,7 @@ from torch.distributed import (
     all_gather, all_gather_object
 )
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, IterableDataset, DataLoader
 
 from ..configs import TrainConfig
 from ..loss import LOSS_REGISTRY
@@ -179,34 +180,49 @@ class Trainer:
             self.num_workers = num_workers if num_workers is not None else 0
             self.pin_memory = pin_memory if pin_memory is not None else False
         
-        # Initialize data samplers for distributed training
-        train_sampler = JetClassDistributedSampler(
-            files_by_class=train_dataset.files_by_class,
-            events_per_file=train_dataset.events_per_file,
-            batch_size=self.batch_size,
-            rank=self.rank,
-            world_size=self.world_size,
-            shuffle_files=True
-        ) if self._is_distributed else None
-        val_sampler = JetClassDistributedSampler(
-            files_by_class=val_dataset.files_by_class,
-            events_per_file=val_dataset.events_per_file,
-            batch_size=self.batch_size,
-            rank=self.rank,
-            world_size=self.world_size,
-            shuffle_files=False
-        ) if self._is_distributed else None
-        test_sampler = JetClassDistributedSampler(
-            files_by_class=test_dataset.files_by_class,
-            events_per_file=test_dataset.events_per_file,
-            batch_size=self.batch_size,
-            rank=self.rank,
-            world_size=self.world_size,
-            shuffle_files=False
-        ) if (test_dataset is not None and self._is_distributed) else None
+        # Phase 7 streaming / scale knobs (None for map-style datasets → behavior unchanged)
+        self.steps_per_epoch = getattr(config, 'steps_per_epoch', None) if config is not None else None
+        self.val_steps = getattr(config, 'val_steps', None) if config is not None else None
+        self.amp = getattr(config, 'amp', None) if config is not None else None
+        self.train_dataset = train_dataset          # kept so streaming datasets get set_epoch each epoch
+        self._is_iterable = isinstance(train_dataset, IterableDataset)
 
-        # Initialize data loaders
-        if self._is_distributed:
+        # Initialize data loaders. Streaming (IterableDataset) shards internally by
+        # (rank x worker), so it uses plain DataLoaders identically in DDP and single-GPU —
+        # no DistributedSampler. Map-style datasets keep the JetClassDistributedSampler path.
+        if self._is_iterable:
+            if self.steps_per_epoch is None:
+                raise ValueError("steps_per_epoch (train.steps_per_epoch) is required for an "
+                                 "IterableDataset — a streamed epoch has no length.")
+            lk = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=self.pin_memory)
+            self.train_loader = DataLoader(train_dataset, drop_last=True, **lk)
+            self.val_loader = DataLoader(val_dataset, drop_last=False, **lk)
+            self.test_loader = DataLoader(test_dataset, drop_last=False, **lk) if test_dataset is not None else None
+        elif self._is_distributed:
+            train_sampler = JetClassDistributedSampler(
+                files_by_class=train_dataset.files_by_class,
+                events_per_file=train_dataset.events_per_file,
+                batch_size=self.batch_size,
+                rank=self.rank,
+                world_size=self.world_size,
+                shuffle_files=True
+            )
+            val_sampler = JetClassDistributedSampler(
+                files_by_class=val_dataset.files_by_class,
+                events_per_file=val_dataset.events_per_file,
+                batch_size=self.batch_size,
+                rank=self.rank,
+                world_size=self.world_size,
+                shuffle_files=False
+            )
+            test_sampler = JetClassDistributedSampler(
+                files_by_class=test_dataset.files_by_class,
+                events_per_file=test_dataset.events_per_file,
+                batch_size=self.batch_size,
+                rank=self.rank,
+                world_size=self.world_size,
+                shuffle_files=False
+            ) if test_dataset is not None else None
             self.train_loader = DataLoader(
                 dataset=train_dataset,
                 batch_sampler=train_sampler,
@@ -297,6 +313,23 @@ class Trainer:
         # Only treat header as written if the file already exists (i.e. resuming a run).
         # For fresh runs the file won't exist yet, so we must write the header on first log_csv call.
         self._log_header_written = os.path.exists(self.logging_path)
+
+    def _steps_per_epoch(self) -> int:
+        """Optimizer steps per epoch: the streaming cap if set, else the map-style loader length."""
+        return self.steps_per_epoch if self.steps_per_epoch is not None else len(self.train_loader)
+
+    def _maybe_set_epoch(self, epoch: int):
+        """Reshuffle a streaming dataset's file order each epoch (no-op for map-style datasets)."""
+        ds = self.train_dataset
+        if hasattr(ds, 'set_epoch'):
+            ds.set_epoch(epoch)
+
+    def _autocast(self):
+        """bf16/fp16 autocast context on CUDA when config.amp is set; a no-op otherwise."""
+        if self.amp in ('bf16', 'fp16') and self.device.type == 'cuda':
+            dtype = torch.bfloat16 if self.amp == 'bf16' else torch.float16
+            return torch.autocast(device_type='cuda', dtype=dtype)
+        return contextlib.nullcontext()
 
     def save_checkpoint(self, epoch: int):
         model_state = self.model.module.state_dict() if self._is_distributed else self.model.state_dict()

@@ -75,6 +75,8 @@ class StreamingJetClassDataset(IterableDataset):
         chunk_size: int = 1000,
         shuffle_buffer: int = 20000,
         seed: int = 42,
+        mask_mode: Optional[str] = None,           # None → (X,y); 'random'/'biased' → (X,y,mask_idx) for JEPA/MAE
+        num_mask: int = 1,
         chunk_reader: Optional[Callable] = None,   # injectable for testing; default = uproot
     ):
         super().__init__()
@@ -91,6 +93,8 @@ class StreamingJetClassDataset(IterableDataset):
         self.chunk_size = chunk_size
         self.shuffle_buffer = shuffle_buffer
         self.seed = seed
+        self.mask_mode = mask_mode
+        self.num_mask = num_mask
         self.epoch = 0
         self._read = chunk_reader or _uproot_chunk_reader
         self._means = np.array([norm_dict[k][0] for k in ['pT', 'eta', 'phi', 'energy']], np.float32)
@@ -118,6 +122,35 @@ class StreamingJetClassDataset(IterableDataset):
                 part[:, i] = (part[:, i] - self._means[i]) / self._stds[i]
         return part
 
+    def _pick_mask(self, valid: np.ndarray, nrng: np.random.Generator) -> np.ndarray:
+        """Which particle(s) to mask — mirrors NpyJetClassDataset (random / high-pT-biased)."""
+        k = self.num_mask
+        if self.mask_mode == 'first':
+            return valid[:k]
+        p = None
+        if self.mask_mode == 'biased':          # weight toward low index = high-pT
+            w = 1.0 / (valid + 1.0); p = w / w.sum()
+        if len(valid) >= k:
+            return nrng.choice(valid, size=k, replace=False, p=p)
+        extra = nrng.choice(valid, size=k - len(valid), replace=True, p=p)
+        return np.concatenate([valid, extra])
+
+    def _emit(self, part: np.ndarray, y: np.ndarray, nrng: np.random.Generator):
+        """(P,F) raw particles + (10,) label → the trainer tuple. Masking (for JEPA/MAE) is applied
+        on RAW particles, then the 4-vector columns are normalized (matches NpyJetClassDataset)."""
+        if self.mask_mode is None:
+            self._norm(part)
+            return torch.from_numpy(part), torch.from_numpy(y)
+        valid = np.where(part[:, 3] > 0)[0]                 # energy>0 = real particle
+        mask_idx = self._pick_mask(valid, nrng)
+        targets = part[mask_idx, :4].copy()                 # raw 4-vector target(s)
+        part[mask_idx, :] = 0.0                             # zero the masked particle(s)
+        self._norm(part)
+        self._norm(targets)                                 # 4-col norm (loops cols 0..3)
+        tgt = targets[0] if targets.shape[0] == 1 else targets
+        return (torch.from_numpy(part), torch.from_numpy(tgt),
+                torch.tensor(mask_idx, dtype=torch.int64))
+
     def _class_chunk_stream(self, files: List[str], rng: random.Random):
         """Chain the (shuffled) files of one class into a stream of chunks."""
         files = list(files)
@@ -137,7 +170,8 @@ class StreamingJetClassDataset(IterableDataset):
             if my:
                 streams.append(self._class_chunk_stream(my, crng))
 
-        buf: List[Tuple[torch.Tensor, torch.Tensor]] = []
+        nrng = np.random.default_rng(self.seed + self.epoch + 104729 * cidx)   # masking rng
+        buf: list = []
         active = list(range(len(streams)))
         while active:
             still = []
@@ -147,9 +181,7 @@ class StreamingJetClassDataset(IterableDataset):
                 except StopIteration:
                     continue
                 for j in range(len(X)):
-                    part = X[j].T.copy()            # (P, F)
-                    self._norm(part)
-                    item = (torch.from_numpy(part), torch.from_numpy(y[j]))
+                    item = self._emit(X[j].T.copy(), y[j], nrng)   # (P,F) raw → trainer tuple
                     if len(buf) < self.shuffle_buffer:
                         buf.append(item)
                     else:

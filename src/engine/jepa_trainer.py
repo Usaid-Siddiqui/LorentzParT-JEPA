@@ -80,8 +80,9 @@ class JEPATrainer(Trainer):
                 cb.on_train_begin(trainer=self)
 
             self._train_start_time = time.monotonic()
-            total_steps = self.num_epochs * len(self.train_loader)
-            start_step = self.start_epoch * len(self.train_loader)
+            steps_per_epoch = self._steps_per_epoch()
+            total_steps = self.num_epochs * steps_per_epoch
+            start_step = self.start_epoch * steps_per_epoch
 
             if self.progress_bar and self.rank == 0:
                 global_bar = tqdm(
@@ -105,6 +106,7 @@ class JEPATrainer(Trainer):
                     self.train_loader.batch_sampler, JetClassDistributedSampler
                 ):
                     self.train_loader.batch_sampler.set_epoch(epoch)
+                self._maybe_set_epoch(epoch)
 
                 for cb in self.callbacks:
                     cb.on_epoch_begin(epoch, trainer=self)
@@ -116,14 +118,15 @@ class JEPATrainer(Trainer):
 
                 for batch_idx, (X, y, mask_idx) in enumerate(self.train_loader):
                     global_step += 1
-                    step = epoch * len(self.train_loader) + batch_idx + 1
+                    step = epoch * steps_per_epoch + batch_idx + 1
 
                     X = X.to(self.device, non_blocking=self.pin_memory)
                     mask_idx = mask_idx.to(self.device).long().squeeze(-1)
 
                     self.optimizer.zero_grad()
-                    pred, target = self._unwrap()(X, mask_idx)
-                    loss, components = self.criterion(pred, target)
+                    with self._autocast():
+                        pred, target = self._unwrap()(X, mask_idx)
+                        loss, components = self.criterion(pred, target)
                     loss.backward()
                     self.optimizer.step()
 
@@ -151,21 +154,30 @@ class JEPATrainer(Trainer):
 
                     global_bar.update(1)
 
+                    # Streaming: an epoch is a fixed number of optimizer steps
+                    if self.steps_per_epoch is not None and (batch_idx + 1) >= self.steps_per_epoch:
+                        break
+
                 # ------ Validation phase ------
                 self.model.eval()
                 val_loss_sum = 0.0
                 val_count = 0
 
                 with torch.no_grad():
-                    for X_val, y_val, mask_idx_val in self.val_loader:
+                    for val_idx, (X_val, y_val, mask_idx_val) in enumerate(self.val_loader):
                         X_val = X_val.to(self.device, non_blocking=self.pin_memory)
                         mask_idx_val = mask_idx_val.to(self.device).long().squeeze(-1)
 
-                        pred_val, target_val = self._unwrap()(X_val, mask_idx_val)
-                        loss_val, _ = self.criterion(pred_val, target_val)
+                        with self._autocast():
+                            pred_val, target_val = self._unwrap()(X_val, mask_idx_val)
+                            loss_val, _ = self.criterion(pred_val, target_val)
                         bsz = X_val.size(0)
                         val_loss_sum += float(loss_val.item()) * bsz
                         val_count += bsz
+
+                        # Streaming: cap validation to a fixed number of batches per epoch
+                        if self.val_steps is not None and (val_idx + 1) >= self.val_steps:
+                            break
 
                 # Gather across processes if distributed
                 if self._is_distributed:
