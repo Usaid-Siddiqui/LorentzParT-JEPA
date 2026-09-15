@@ -20,10 +20,9 @@ train:
     name: cosine_annealing_lr
     T_max: 30                    # keep == num_epochs
     eta_min: 0.000001
-  callbacks:
-    - name: early_stopping
-      patience: 10
-      min_delta: 0.0005
+  callbacks: []                    # NO early stopping — every cell trains the full fixed budget
+                                   # (equal steps = apples-to-apples across the 2x2; also avoids the
+                                   # get_callbacks_from_config patience bug + JEPA BN-warmup false trips)
   num_epochs: 30
   steps_per_epoch: 2000          # ~1M jets/epoch at batch 256 x 2 GPUs; scale this up for 100M
   val_steps: 100                 # cap val to 100 batches/epoch (streamed 5M val)
