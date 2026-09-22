@@ -5,10 +5,15 @@ from lgatr.interface import embed_vector
 
 
 class ParticleProcessor(nn.Module):
-    def __init__(self, to_multivector: bool = False, pad_fill: float = -1e9):
+    def __init__(self, to_multivector: bool = False, pad_fill: float = -1e9,
+                 cartesian_mv: bool = False):
         super(ParticleProcessor, self).__init__()
         self.to_multivector = to_multivector
         self.pad_fill = pad_fill   # padded-pair fill in U; -1e9 corrupts BN stats (Phase-3 decomp uses 0.0)
+        # Phase 8: feed embed_vector a real Lorentz vector (E, px, py, pz) instead of (pT, eta, phi, E).
+        # ONLY correct alongside a common pT/E scale (see NORM_DICT_COMMON) — with the per-feature
+        # norm the reassembled 4-vector is still not a 4-vector (equivariance err 1.2e-1 vs 3e-8).
+        self.cartesian_mv = cartesian_mv
 
     def _get_interaction(self, x: Tensor) -> Tensor:
         # Identify the padding particles (assume padding particles have zero energy)
@@ -89,14 +94,15 @@ class ParticleProcessor(nn.Module):
         U = self._get_interaction(x)  # (B, N, N, 4)
 
         if self.to_multivector:
-            # Convert (pT, eta, phi, E) to (E, px, py, pz) for EquiLinear layer
-            # x = torch.stack([
-            #     x[..., 3],  # E
-            #     x[..., 0] * torch.cos(x[..., 2]),  # px = pT * cos(phi)
-            #     x[..., 0] * torch.sin(x[..., 2]),  # py = pT * sin(phi)
-            #     x[..., 0] * torch.sinh(x[..., 1]),  # pz = pT * sinh(eta)
-            # ], dim=-1)
-            
+            if self.cartesian_mv:
+                # Convert (pT, eta, phi, E) to (E, px, py, pz) for the EquiLinear layer
+                x = torch.stack([
+                    x[..., 3],                          # E
+                    x[..., 0] * torch.cos(x[..., 2]),   # px = pT * cos(phi)
+                    x[..., 0] * torch.sin(x[..., 2]),   # py = pT * sin(phi)
+                    x[..., 0] * torch.sinh(x[..., 1]),  # pz = pT * sinh(eta)
+                ], dim=-1)
+
             # Lorentz-equivariant embedding
             x = x.view(B, N, 1, F)  # for compatibility with the EquiLinear layer
             x = embed_vector(x)  # (B, N, 1, 16)

@@ -42,6 +42,10 @@ def parse_args():
     p.add_argument('--nproc', type=int, default=2, help="GPUs (torchrun --nproc_per_node)")
     p.add_argument('--steps-per-epoch', type=int, default=None, help="override configs for this scale")
     p.add_argument('--num-epochs', type=int, default=None)
+    p.add_argument('--common-scale', action='store_true',
+                   help='Phase 8 fix: one scale for pT and E (use a distinct --scale label)')
+    p.add_argument('--cartesian-mv', action='store_true',
+                   help='Phase 8 fix: Cartesian embed_vector (lorentzpart only, needs --common-scale)')
     return p.parse_args()
 
 
@@ -58,6 +62,10 @@ def torchrun(args, model, protocol, run_name, weights=None):
         cmd += ['--steps-per-epoch', str(args.steps_per_epoch)]
     if args.num_epochs is not None:
         cmd += ['--num-epochs', str(args.num_epochs)]
+    if args.common_scale:
+        cmd += ['--common-scale']
+    if args.cartesian_mv:
+        cmd += ['--cartesian-mv']
     print(f"\n[run] {run_name}\n  {' '.join(cmd)}", flush=True)
     try:
         subprocess.run(cmd, cwd=_REPO, check=True)

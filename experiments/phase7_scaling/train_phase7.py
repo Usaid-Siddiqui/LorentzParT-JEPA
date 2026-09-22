@@ -42,6 +42,12 @@ NORM_DICT = {'pT': (92.72917175292969, 105.83937072753906),
              'energy': (133.8745574951172, 167.528564453125)}
 NORMALIZE = [True, False, False, True]
 
+# Phase 8: pT and E must share ONE scale or m2 = E_sum^2 - |p_sum|^2 stops being the pair
+# invariant mass — it goes negative for every in-cone pair and ln_m2 clamps to log(1e-8)
+# (99.99% of real JetClass pairs, measured). Giving 'energy' the pT mean is the whole fix;
+# the dataset just divides by these means, so no loader change is needed.
+NORM_DICT_COMMON = {**NORM_DICT, 'energy': (NORM_DICT['pT'][0], NORM_DICT['energy'][1])}
+
 # Shared encoder architecture — IDENTICAL for every cell so params match (parity is the whole point).
 ARCH = dict(embed_dim=128, num_heads=8, num_layers=8)
 # JEPA predictor/EMA — the corrected phase-2/6 recipe.
@@ -72,6 +78,10 @@ def parse_args():
     p.add_argument('--seed', type=int, default=42)
     p.add_argument('--num-epochs', type=int, default=None, help='override config')
     p.add_argument('--steps-per-epoch', type=int, default=None, help='override config')
+    p.add_argument('--common-scale', action='store_true',
+                   help='Phase 8: scale pT and E by the same mean so ln_m2 is a real feature')
+    p.add_argument('--cartesian-mv', action='store_true',
+                   help='Phase 8: feed embed_vector (E,px,py,pz); lorentzpart only, needs --common-scale')
     return p.parse_args()
 
 
@@ -79,11 +89,13 @@ def build_model(args, n_extra):
     encoder_type = 'part' if args.model == 'part' else 'lorentz'
     if args.protocol == 'jepa_pretrain':
         return ParticleJEPA(**ARCH, **JEPA_EXTRA, ragged_pair_embed=True,
-                            num_extra_features=n_extra, encoder_type=encoder_type)
+                            num_extra_features=n_extra, encoder_type=encoder_type,
+                            cartesian_mv=args.cartesian_mv)
     # supervised (scratch or jepa_finetune): classification model, optionally encoder-initialized
     cls = ParticleTransformer if args.model == 'part' else LorentzParT
+    extra = {} if args.model == 'part' else dict(cartesian_mv=args.cartesian_mv)
     return cls(**ARCH, num_cls_layers=2, num_classes=args.num_classes,
-               ragged_pair_embed=True, num_extra_features=n_extra,
+               ragged_pair_embed=True, num_extra_features=n_extra, **extra,
                weights=args.weights if args.protocol == 'jepa_finetune' else None)
 
 
@@ -99,8 +111,9 @@ def main():
     is_jepa = args.protocol == 'jepa_pretrain'
     mask_mode = 'biased' if is_jepa else None
 
-    ds_kw = dict(particle_features=feats, norm_dict=NORM_DICT, normalize=NORMALIZE,
-                 mask_mode=mask_mode, seed=args.seed)
+    ds_kw = dict(particle_features=feats,
+                 norm_dict=NORM_DICT_COMMON if args.common_scale else NORM_DICT,
+                 normalize=NORMALIZE, mask_mode=mask_mode, seed=args.seed)
     train_ds = StreamingJetClassDataset(args.train_dir, **ds_kw)
     val_ds = StreamingJetClassDataset(args.val_dir, **ds_kw)
 
@@ -122,7 +135,9 @@ def main():
 
     if local_rank == 0:
         print(f"[phase7] {args.run_name}: model={args.model} protocol={args.protocol} "
-              f"features={args.features} (n_extra={n_extra}) world_size={world_size} "
+              f"features={args.features} (n_extra={n_extra}) common_scale={args.common_scale} "
+              f"cartesian_mv={args.cartesian_mv} "
+              f"world_size={world_size} "
               f"steps/epoch={tcfg.steps_per_epoch} epochs={tcfg.num_epochs} amp={tcfg.amp}", flush=True)
 
     trainer.train()

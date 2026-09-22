@@ -97,6 +97,7 @@ class ParticleJEPA(nn.Module):
         pad_fill_zero: bool = False,
         num_extra_features: int = 0,
         encoder_type: str = 'lorentz',
+        cartesian_mv: bool = False,
     ):
         super().__init__()
 
@@ -120,7 +121,8 @@ class ParticleJEPA(nn.Module):
         # Shared processor: 'lorentz' emits 16-dim multivectors, 'part' the raw 4-vector; both
         # emit the same pairwise interaction matrix U.
         self.processor = ParticleProcessor(to_multivector=to_multivector,
-                                           pad_fill=0.0 if pad_fill_zero else -1e9)
+                                           pad_fill=0.0 if pad_fill_zero else -1e9,
+                                           cartesian_mv=cartesian_mv)
 
         # Context encoder (trainable)
         self.context_encoder = encoder_cls(
