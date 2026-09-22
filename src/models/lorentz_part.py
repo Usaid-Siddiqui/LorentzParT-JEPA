@@ -52,12 +52,19 @@ class LorentzParTEncoder(nn.Module):
         ])
     
     def forward(self, x: Tensor, padding_mask: Tensor, U: Tensor,
-                extras: Optional[Tensor] = None) -> Tensor:
+                extras: Optional[Tensor] = None,
+                pair_valid: Optional[Tensor] = None) -> Tensor:
         B, N, F = x.shape  # (batch_size, max_num_particles, 16)
 
         # Embed interaction features
         if self.ragged_pair_embed:
-            valid = padding_mask == 0  # (B, N) True where non-padding (masked particles count as valid)
+            # Phase 8: gather ONLY pairs the processor actually computed features for.
+            # `padding_mask` marks SSL-masked particles as valid so attention still sees a
+            # slot there, but the processor treats them as padding (energy == 0) and fills
+            # their pairs with pad_fill (-1e9). Gathering those into BatchNorm destroys the
+            # statistics and makes U information-free. `pair_valid` (energy > 0) is the
+            # processor's own criterion; fall back to the old behaviour only if not supplied.
+            valid = pair_valid if pair_valid is not None else (padding_mask == 0)
             valid_pairs = valid[:, :, None] & valid[:, None, :]  # (B, N, N)
             U = self.interaction_embed(U, valid_pairs)  # (B * num_heads, N, N)
         else:
@@ -307,10 +314,11 @@ class LorentzParT(nn.Module):
             padding_mask[batch_indices, mask_idx] = 0.0
 
         # Process particles to get interaction embeddings and multivectors (if applicable)
+        pair_valid = x[..., 3] > 0          # processor's own validity test (energy > 0)
         x, U = self.processor(x)
 
         # Pass through equilinear layer and particle attention blocks
-        x = self.encoder(x, padding_mask, U, extras)
+        x = self.encoder(x, padding_mask, U, extras, pair_valid)
 
         # Classification (no masking in this case)
         if not self.mask:

@@ -67,10 +67,35 @@ class Lookahead(Optimizer):
         return self._la_step
 
     def state_dict(self):
-        return self.optimizer.state_dict()
+        """Inner optimizer state PLUS Lookahead's own slow weights and step counter.
+
+        Phase 8: previously only the inner optimizer was saved, so a resumed run silently
+        restarted the Lookahead cycle and discarded the slow weights.
+        """
+        inner = self.optimizer.state_dict()
+        cached = []
+        for group in self.optimizer.param_groups:
+            for p in group['params']:
+                cached.append(self.state[p].get('cached_params'))
+        return {'inner': inner, 'la_state': {'_la_step': self._la_step,
+                                             'la_alpha': self.la_alpha,
+                                             'cached_params': cached}}
 
     def load_state_dict(self, state_dict):
-        self.optimizer.load_state_dict(state_dict)
+        if 'la_state' not in state_dict:          # legacy checkpoint: inner state only
+            self.optimizer.load_state_dict(state_dict)
+            return
+        self.optimizer.load_state_dict(state_dict['inner'])
+        la = state_dict['la_state']
+        self._la_step = la['_la_step']
+        self.la_alpha = la['la_alpha']
+        cached = la['cached_params']
+        i = 0
+        for group in self.optimizer.param_groups:
+            for p in group['params']:
+                if i < len(cached) and cached[i] is not None:
+                    self.state[p]['cached_params'] = cached[i].to(p.device)
+                i += 1
 
     def _backup_and_load_cache(self):
         """

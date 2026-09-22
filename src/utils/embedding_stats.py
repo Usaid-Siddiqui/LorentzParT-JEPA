@@ -82,10 +82,15 @@ def probe_encoder_stats(
             break
 
         X = batch[0].to(device)
+        # Phase 8: the processor takes the 4-vector only; extras ride into the encoder.
+        n_extra = getattr(encoder, 'num_extra_features', 0)
+        extras = X[..., 4:] if n_extra > 0 else None
+        X = X[..., :4]
         padding_mask = (X[..., 3] == 0).float()
 
+        pair_valid = X[..., 3] > 0
         mv, U = processor(X)
-        embeddings = encoder(mv, padding_mask, U)  # (B, N, D)
+        embeddings = encoder(mv, padding_mask, U, extras, pair_valid)  # (B, N, D)
 
         valid = 1.0 - padding_mask
         valid_sum = valid.sum(dim=1, keepdim=True).clamp(min=1.0)

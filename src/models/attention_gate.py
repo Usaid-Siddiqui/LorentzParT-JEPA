@@ -31,9 +31,10 @@ class AttentionGate(nn.Module):
     For each particle i, aggregates its pairwise relationships with all other
     particles by mean-pooling U over the neighbor dimension, then maps the
     resulting 4-dim summary through a small MLP to produce a scalar gate in
-    [0, 1]. Padding pairs (set to -1e9 in the processor) are included in the
-    mean but have negligible effect due to their large negative values pulling
-    the log features down uniformly.
+    [0, 1]. Padding pairs (set to -1e9 in the processor) are EXCLUDED from the
+    mean via ``valid_mask`` — including them saturates the sigmoid to exactly 1.0
+    with zero gradient and freezes the gate into a no-op. (The previous wording
+    here claimed the opposite; it described the bug, not the code.)
 
     Parameters
     ----------

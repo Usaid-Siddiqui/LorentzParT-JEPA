@@ -88,8 +88,11 @@ class MaskedModelTrainer(Trainer):
                 cb.on_train_begin(trainer=self)
 
             self._train_start_time = time.monotonic()
-            total_steps = self.num_epochs * len(self.train_loader)
-            start_step = self.start_epoch * len(self.train_loader)
+            # Phase 8: a streamed epoch has no len() — it is steps_per_epoch optimizer steps.
+            steps_per_epoch = (self.steps_per_epoch if self.steps_per_epoch is not None
+                               else len(self.train_loader))
+            total_steps = self.num_epochs * steps_per_epoch
+            start_step = self.start_epoch * steps_per_epoch
             if self.progress_bar and self.rank == 0:
                 global_bar = tqdm(
                     total=total_steps,
@@ -121,15 +124,16 @@ class MaskedModelTrainer(Trainer):
                 running_count = 0
 
                 for batch_idx, (X, y, mask_idx) in enumerate(self.train_loader):
-                    step = epoch * len(self.train_loader) + batch_idx + 1
+                    step = epoch * steps_per_epoch + batch_idx + 1
 
                     X = X.to(self.device, non_blocking=self.pin_memory)
                     y = y.to(self.device, non_blocking=self.pin_memory)
                     mask_idx = mask_idx.to(self.device).long()
 
                     self.optimizer.zero_grad()
-                    outputs = self.model(X, mask_idx)
-                    loss, components = self.criterion(outputs, y)
+                    with self._autocast():      # Phase 8: amp was silently ignored for MAE
+                        outputs = self.model(X, mask_idx)
+                        loss, components = self.criterion(outputs, y)
                     loss.backward()
                     self.optimizer.step()
                     bsz = y.size(0)
@@ -163,6 +167,10 @@ class MaskedModelTrainer(Trainer):
 
                     global_bar.update(1)
 
+                    # Phase 8 / streaming: an epoch is a fixed number of optimizer steps.
+                    if self.steps_per_epoch is not None and (batch_idx + 1) >= self.steps_per_epoch:
+                        break
+
                 # Validation phase
                 self.model.eval()
                 val_loss_sum = 0.0
@@ -170,13 +178,14 @@ class MaskedModelTrainer(Trainer):
                 val_count = 0
 
                 with torch.no_grad():
-                    for X_val, y_val, mask_idx in self.val_loader:
+                    for val_idx, (X_val, y_val, mask_idx) in enumerate(self.val_loader):
                         X_val = X_val.to(self.device, non_blocking=self.pin_memory)
                         y_val = y_val.to(self.device, non_blocking=self.pin_memory)
                         mask_idx = mask_idx.to(self.device).long()
 
-                        outputs_val = self.model(X_val, mask_idx)
-                        loss_val, v_components = self.criterion(outputs_val, y_val)
+                        with self._autocast():
+                            outputs_val = self.model(X_val, mask_idx)
+                            loss_val, v_components = self.criterion(outputs_val, y_val)
                         bsz = y_val.size(0)
                         val_loss_sum += float(loss_val.item()) * bsz
 
@@ -193,6 +202,10 @@ class MaskedModelTrainer(Trainer):
                             device=self.device
                         ) * bsz
                         val_count += bsz
+
+                        # Phase 8 / streaming: cap validation to val_steps batches.
+                        if self.val_steps is not None and (val_idx + 1) >= self.val_steps:
+                            break
 
                 # Gather validation results from all processes
                 if self._is_distributed:

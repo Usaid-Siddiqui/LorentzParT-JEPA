@@ -40,6 +40,7 @@ class ConservationLoss(nn.Module):
         reduction: str = 'mean'
     ):
         super(ConservationLoss, self).__init__()
+        self.alpha = alpha            # Phase 8: was accepted and silently dropped
         self.beta = beta
         self.gamma = gamma
         self.loss_coef = loss_coef
@@ -69,8 +70,12 @@ class ConservationLoss(nn.Module):
 
         # Compute cosine similarity between predicted and true values
         cos_sim = cos_true * cos_pred + sin_true * sin_pred
-        loss = (1.0 - cos_sim).mean()
-
+        loss = 1.0 - cos_sim
+        # Phase 8: honour self.reduction like the other three terms (was hardcoded .mean()).
+        if self.reduction == 'mean':
+            return loss.mean()
+        if self.reduction == 'sum':
+            return loss.sum()
         return loss
 
     def _energy_loss(self, E_pred: Tensor, E_true: Tensor) -> Tensor:

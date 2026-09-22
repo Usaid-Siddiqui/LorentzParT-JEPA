@@ -155,6 +155,18 @@ class ParticleJEPA(nn.Module):
             dropout=predictor_dropout,
         )
 
+    def train(self, mode: bool = True):
+        """Keep the target encoder in eval mode.
+
+        Phase 8: the trainer calls ``model.train()`` on the whole module, which switched the
+        target encoder's dropout on and made its BatchNorms use batch statistics. The JEPA
+        target must be DETERMINISTIC (BYOL / I-JEPA both eval() it) — otherwise a large part
+        of the loss is target noise rather than learnable signal.
+        """
+        super().train(mode)
+        self.target_encoder.eval()
+        return self
+
     @torch.no_grad()
     def update_target_encoder(self, momentum: Optional[float] = None):
         """
@@ -177,6 +189,17 @@ class ParticleJEPA(nn.Module):
             self.target_encoder.parameters(),
         ):
             tgt_param.data.lerp_(ctx_param.data, 1.0 - momentum)
+
+        # Phase 8: BatchNorm running_mean/var are BUFFERS, not parameters. Without this the
+        # target encoder's normalisation statistics never track the context encoder.
+        for ctx_buf, tgt_buf in zip(
+            self.context_encoder.buffers(),
+            self.target_encoder.buffers(),
+        ):
+            if tgt_buf.dtype.is_floating_point:
+                tgt_buf.data.lerp_(ctx_buf.data.to(tgt_buf.dtype), 1.0 - momentum)
+            else:
+                tgt_buf.data.copy_(ctx_buf.data)      # e.g. num_batches_tracked
 
     def forward(
         self, x: Tensor, mask_idx: Tensor
@@ -246,14 +269,18 @@ class ParticleJEPA(nn.Module):
 
         # ---------- Target encoder (no gradient) ----------
         with torch.no_grad():
-            target_out = self.target_encoder(full_mv, full_padding_mask, U_full, full_extras)
+            target_out = self.target_encoder(full_mv, full_padding_mask, U_full, full_extras,
+                                             x4[..., 3] > 0)
             # Extract K target embeddings per jet: (B, K, embed_dim)
             target_embed = target_out[batch_idx.unsqueeze(1), mask_idx]
 
         # ---------- Context encoder (trainable) ----------
-        context_out = self.context_encoder(context_mv, context_padding_mask, U_context, masked_extras)
+        # pair_valid excludes the SSL-masked particles: the processor filled their pairs with
+        # pad_fill, so gathering them would poison the interaction BatchNorm (Phase 8).
+        context_out = self.context_encoder(context_mv, context_padding_mask, U_context,
+                                           masked_extras, masked_x4[..., 3] > 0)
 
         # ---------- Predictor ----------
-        predicted_embed = self.predictor(context_out, mask_idx)   # (B, K, embed_dim)
+        predicted_embed = self.predictor(context_out, mask_idx, context_padding_mask)
 
         return predicted_embed, target_embed.detach()

@@ -90,7 +90,11 @@ def get_callbacks_from_config(callbacks_config: List[Dict], registry: Dict) -> L
 
     for cb_cfg in callbacks_config:
         name = cb_cfg['name']
-        kwargs = cb_cfg.get('kwargs', {})
+        # Phase 8: every config writes params FLAT (``- name: early_stopping`` / ``patience: 7``)
+        # but this only read a nested ``kwargs:`` block, so all of them were silently dropped and
+        # every run used the defaults (patience=5, min_delta=0.0). Accept both spellings.
+        kwargs = {k: v for k, v in cb_cfg.items() if k not in ('name', 'kwargs')}
+        kwargs.update(cb_cfg.get('kwargs', {}))
 
         if name not in registry:
             raise ValueError(f"Callback '{name}' not found in registry.")

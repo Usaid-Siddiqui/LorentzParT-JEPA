@@ -18,6 +18,8 @@ collapsing by forcing it to summarise particle information rather than just
 copying representations through.
 """
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -84,7 +86,8 @@ class ParticlePredictor(nn.Module):
         # Project predictions back up to encoder dimension for loss computation
         self.output_proj = nn.Linear(predictor_dim, encoder_dim)
 
-    def forward(self, encoder_output: Tensor, mask_idx: Tensor) -> Tensor:
+    def forward(self, encoder_output: Tensor, mask_idx: Tensor,
+                padding_mask: Optional[Tensor] = None) -> Tensor:
         """
         Parameters
         ----------
@@ -117,8 +120,11 @@ class ParticlePredictor(nn.Module):
             pos_embed_k = self.pos_embed(idx_k)                # (B, predictor_dim)
             x[batch_idx, idx_k] = self.mask_token + pos_embed_k
 
-        # Run through transformer (all K mask tokens attend to each other + context)
-        x = self.transformer(x)                                # (B, N, predictor_dim)
+        # Run through transformer (all K mask tokens attend to each other + context).
+        # Phase 8: exclude padded slots — without this the predictor attends over ~90 empty
+        # positions per jet. Masked positions are kept attendable (their padding_mask is 0).
+        src_kpm = padding_mask.bool() if padding_mask is not None else None
+        x = self.transformer(x, src_key_padding_mask=src_kpm)  # (B, N, predictor_dim)
         x = self.norm(x)
 
         # Extract predictions at all K masked positions

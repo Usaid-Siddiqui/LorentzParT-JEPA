@@ -125,7 +125,10 @@ class JEPATrainer(Trainer):
 
                     self.optimizer.zero_grad()
                     with self._autocast():
-                        pred, target = self._unwrap()(X, mask_idx)
+                        # Phase 8: call the DDP wrapper, not the raw module. Going through
+                        # `_unwrap()` skipped DDP.forward()/prepare_for_backward(), so gradients
+                        # were NEVER all-reduced and each rank trained a divergent copy.
+                        pred, target = self.model(X, mask_idx)
                         loss, components = self.criterion(pred, target)
                     loss.backward()
                     self.optimizer.step()

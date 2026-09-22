@@ -116,11 +116,14 @@ class AttentiveProbeModel(nn.Module):
         -------
         logits : Tensor, shape (B, num_classes)
         """
+        extras = x[..., 4:] if getattr(self, 'num_extra_features', 0) > 0 else None
+        x = x[..., :4]
         padding_mask = (x[..., 3] == 0).float()  # (B, N)
 
         with torch.no_grad():
+            pair_valid = x[..., 3] > 0
             mv, U = self.processor(x)
-            embeddings = self.encoder(mv, padding_mask, U)  # (B, N, embed_dim)
+            embeddings = self.encoder(mv, padding_mask, U, extras, pair_valid)
 
         x_cls = self.cls_token.expand(x.size(0), -1, -1)  # (B, 1, embed_dim)
         for layer in self.decoder:
@@ -201,6 +204,7 @@ class AttentivePoolProbeModel(nn.Module):
         pad_bool = x[..., 3] == 0  # (B, N) True at padded particles
 
         with torch.no_grad():
+            pair_valid = x[..., 3] > 0
             mv, U = self.processor(x)
             embeddings = self.encoder(mv, pad_bool.float(), U)  # encoder: trained w/ float mask
 

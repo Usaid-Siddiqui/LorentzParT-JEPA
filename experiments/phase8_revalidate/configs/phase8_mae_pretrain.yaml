@@ -1,0 +1,36 @@
+# Phase 8 MAE-pretrain recipe — protocol=mae_pretrain (reconstructs the masked 4-vector).
+# Same schedule/optimizer as the JEPA arm so the SSL methods are compared at equal budget.
+# Streaming epoch = steps_per_epoch optimizer steps; no early stopping. The saved checkpoint is a
+# full LorentzParT/ParT; the *_finetune protocols load its `encoder.*` keys.
+
+train:
+  batch_size: 256
+  criterion:
+    name: conservation_loss
+    loss_coef: [0.25, 0.25, 0.25, 0.25]   # [pT, eta, phi, energy]
+    reduction: mean
+  optimizer:
+    name: radam
+    lr: 0.0003
+    betas: [0.95, 0.999]
+  optimizer_wrapper:
+    name: lookahead
+    la_steps: 6
+    la_alpha: 0.5
+  scheduler:
+    name: cosine_annealing_lr
+    T_max: 30
+    eta_min: 0.000003
+  callbacks: []
+  num_epochs: 30
+  steps_per_epoch: 2000
+  val_steps: 100
+  amp: bf16
+  start_epoch: 0
+  logging_dir: ./logs
+  logging_steps: 100
+  progress_bar: false
+  save_best: true
+  save_ckpt: true
+  num_workers: 6
+  pin_memory: true

@@ -160,7 +160,6 @@ class StreamingJetClassDataset(IterableDataset):
 
     def __iter__(self):
         cidx, ncons = self._consumer()
-        rng = random.Random(self.seed + self.epoch)
         crng = random.Random(self.seed + self.epoch + 7919 * cidx)
 
         # Shard each class's files across consumers → each consumer sees all classes, balanced.

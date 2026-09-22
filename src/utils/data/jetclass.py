@@ -92,19 +92,12 @@ class NpyJetClassDataset(Dataset):
 
         if mode == 'first':
             mask_idx = valid_idx[:num_mask]
-        elif mode == 'biased' and num_mask == 1:
-            # Rejection sampling biased toward low indices (high-pT particles).
-            # Kept as-is so existing K=1 biased runs stay bit-reproducible.
-            total = np.sum(1 / (np.arange(particles.shape[0]) + 1))
-            idx = 127
-            u, w = 0, 1
-            while (u < w) or (idx not in valid_idx):
-                u = np.random.uniform()
-                idx = np.random.randint(0, particles.shape[0])
-                w = (1 / (idx + 1)) / total
-            mask_idx = np.array([idx])
         else:
-            # random (uniform) or biased K>1 (high-pT weighted, w ∝ 1/(index+1)).
+            # random (uniform) or biased (high-pT weighted, w ∝ 1/(index+1)).
+            # Phase 8: the old K=1 'biased' branch used rejection sampling that accepted with
+            # probability (1 - w) — INVERTED, and so weak it was indistinguishable from uniform
+            # (mean index 29.9 vs 29.5 uniform). It is removed; K=1 now uses this same weighted
+            # draw as K>1 and as the streaming loader, so the two data paths finally agree.
             # Deficit handling: jets with fewer than num_mask valid particles pad
             # the remainder by repeating, keeping a fixed (K,) shape for batching.
             p = None

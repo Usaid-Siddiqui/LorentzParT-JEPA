@@ -38,10 +38,15 @@ class LinearProbeModel(nn.Module):
         embed_dim: int = 128,
         num_classes: int = 10,
         encoder_kwargs: Optional[dict] = None,
+        num_extra_features: int = 0,
     ):
         super().__init__()
 
-        kw = encoder_kwargs or {}
+        kw = dict(encoder_kwargs or {})
+        # Phase 8: extras (displacement / PID) must reach the encoder, and the processor must
+        # only ever see the 4-vector — it was previously handed the full 14-column tensor.
+        self.num_extra_features = num_extra_features
+        kw.setdefault('num_extra_features', num_extra_features)
         self.processor = ParticleProcessor(to_multivector=True)
         self.encoder = LorentzParTEncoder(embed_dim=embed_dim, **kw)
 
@@ -74,11 +79,14 @@ class LinearProbeModel(nn.Module):
         -------
         logits : Tensor, shape (B, num_classes)
         """
+        extras = x[..., 4:] if self.num_extra_features > 0 else None
+        x = x[..., :4]
         padding_mask = (x[..., 3] == 0).float()  # (B, N)
 
         with torch.no_grad():
+            pair_valid = x[..., 3] > 0
             mv, U = self.processor(x)
-            embeddings = self.encoder(mv, padding_mask, U)  # (B, N, embed_dim)
+            embeddings = self.encoder(mv, padding_mask, U, extras, pair_valid)
 
         # Mean pool over valid (non-padding) particles
         valid = 1.0 - padding_mask                                    # (B, N)

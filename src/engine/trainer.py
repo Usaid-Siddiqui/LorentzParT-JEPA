@@ -34,6 +34,13 @@ from ..utils.data import JetClassDistributedSampler
 from ..utils.viz import *
 
 
+def _seed_numpy_worker(worker_id: int) -> None:
+    """Give each DataLoader worker its own numpy seed (PyTorch only reseeds torch,
+    so on fork every worker inherits the same numpy state — Phase 8)."""
+    import numpy as _np
+    _np.random.seed((torch.initial_seed() + worker_id) % (2 ** 32))
+
+
 class Trainer:
     """
     Base class for training models.
@@ -187,6 +194,10 @@ class Trainer:
         self.train_dataset = train_dataset          # kept so streaming datasets get set_epoch each epoch
         self._is_iterable = isinstance(train_dataset, IterableDataset)
 
+        # Phase 8: the map-style masking path uses np.random; without this every worker
+        # drew the identical mask sequence.
+        lk_common = dict(worker_init_fn=_seed_numpy_worker) if self.num_workers > 0 else {}
+
         # Initialize data loaders. Streaming (IterableDataset) shards internally by
         # (rank x worker), so it uses plain DataLoaders identically in DDP and single-GPU —
         # no DistributedSampler. Map-style datasets keep the JetClassDistributedSampler path.
@@ -194,7 +205,8 @@ class Trainer:
             if self.steps_per_epoch is None:
                 raise ValueError("steps_per_epoch (train.steps_per_epoch) is required for an "
                                  "IterableDataset — a streamed epoch has no length.")
-            lk = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=self.pin_memory)
+            lk = dict(batch_size=self.batch_size, num_workers=self.num_workers,
+                      pin_memory=self.pin_memory, **lk_common)
             self.train_loader = DataLoader(train_dataset, drop_last=True, **lk)
             self.val_loader = DataLoader(val_dataset, drop_last=False, **lk)
             self.test_loader = DataLoader(test_dataset, drop_last=False, **lk) if test_dataset is not None else None
@@ -227,19 +239,22 @@ class Trainer:
                 dataset=train_dataset,
                 batch_sampler=train_sampler,
                 num_workers=self.num_workers,
-                pin_memory=self.pin_memory
+                pin_memory=self.pin_memory,
+                **lk_common
             )
             self.val_loader = DataLoader(
                 dataset=val_dataset,
                 batch_sampler=val_sampler,
                 num_workers=self.num_workers,
-                pin_memory=self.pin_memory
+                pin_memory=self.pin_memory,
+                **lk_common
             )
             self.test_loader = DataLoader(
                 dataset=test_dataset,
                 batch_sampler=test_sampler,
                 num_workers=self.num_workers,
-                pin_memory=self.pin_memory
+                pin_memory=self.pin_memory,
+                **lk_common
             ) if test_dataset is not None else None
         else:
             self.train_loader = DataLoader(
@@ -247,21 +262,24 @@ class Trainer:
                 batch_size=self.batch_size,
                 shuffle=True,
                 num_workers=self.num_workers,
-                pin_memory=self.pin_memory
+                pin_memory=self.pin_memory,
+                **lk_common
             )
             self.val_loader = DataLoader(
                 dataset=val_dataset,
                 batch_size=self.batch_size,
                 shuffle=False,
                 num_workers=self.num_workers,
-                pin_memory=self.pin_memory
+                pin_memory=self.pin_memory,
+                **lk_common
             )
             self.test_loader = DataLoader(
                 dataset=test_dataset,
                 batch_size=self.batch_size,
                 shuffle=False,
                 num_workers=self.num_workers,
-                pin_memory=self.pin_memory
+                pin_memory=self.pin_memory,
+                **lk_common
             ) if test_dataset is not None else None
 
         # Initialize metrics and history
@@ -326,9 +344,16 @@ class Trainer:
 
     def _autocast(self):
         """bf16/fp16 autocast context on CUDA when config.amp is set; a no-op otherwise."""
-        if self.amp in ('bf16', 'fp16') and self.device.type == 'cuda':
-            dtype = torch.bfloat16 if self.amp == 'bf16' else torch.float16
-            return torch.autocast(device_type='cuda', dtype=dtype)
+        # Phase 8: fp16 autocast REQUIRES a GradScaler or gradients underflow silently.
+        # No trainer here uses one, so fp16 is rejected rather than quietly degrading.
+        # bf16 has the same dynamic range as fp32 and needs no scaler — use it.
+        if self.amp == 'fp16':
+            raise ValueError(
+                "amp: fp16 is not supported (no GradScaler in the training loops); "
+                "use amp: bf16 on Ampere/Hopper, or amp: null for fp32."
+            )
+        if self.amp == 'bf16' and self.device.type == 'cuda':
+            return torch.autocast(device_type='cuda', dtype=torch.bfloat16)
         return contextlib.nullcontext()
 
     def save_checkpoint(self, epoch: int):

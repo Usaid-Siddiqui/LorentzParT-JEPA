@@ -43,7 +43,10 @@ class ClassAttentionBlock(nn.Module):
         residual = x_cls
         x = torch.cat((x_cls, x), dim=1)  # (B, N + 1, D)
         x = self.layernorm1(x)
-        x, _ = self.mha(x_cls, x, x, key_padding_mask=padding_mask)
+        # Phase 8: query the NORMALISED class token (x[:, :1]), not the raw x_cls. Previously
+        # the query bypassed layernorm1 while keys/values went through it, leaving query and
+        # key on different scales and distorting the attention temperature.
+        x, _ = self.mha(x[:, :1], x, x, key_padding_mask=padding_mask)
         x = self.layernorm2(x)
         x = self.dropout(x)
 
