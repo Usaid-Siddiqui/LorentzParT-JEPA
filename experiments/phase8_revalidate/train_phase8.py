@@ -115,6 +115,13 @@ def main():
         tcfg = TrainConfig.from_dict(yaml.safe_load(f)['train'])
     if args.num_epochs is not None:
         tcfg.num_epochs = args.num_epochs
+        # Keep the cosine schedule in step with the ACTUAL epoch count. The configs ship
+        # T_max: 30 to match their default num_epochs; overriding epochs without this left
+        # T_max at 30, so a 4-epoch run annealed the LR by ~4% (0.000997 -> 0.000957) and
+        # effectively trained at a constant peak LR.
+        sch = getattr(tcfg, 'scheduler', None)
+        if isinstance(sch, dict) and 'T_max' in sch:
+            sch['T_max'] = args.num_epochs
     if args.steps_per_epoch is not None:
         tcfg.steps_per_epoch = args.steps_per_epoch
 

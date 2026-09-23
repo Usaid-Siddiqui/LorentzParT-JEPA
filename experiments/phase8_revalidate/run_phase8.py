@@ -47,6 +47,12 @@ def parse_args():
     p.add_argument('--nproc', type=int, default=1)
     p.add_argument('--steps-per-epoch', type=int, default=None)
     p.add_argument('--num-epochs', type=int, default=None)
+    p.add_argument('--pretrain-epochs', type=int, default=None,
+                   help='epochs for the SSL PRETRAIN stage (default: same as --num-epochs). '
+                        'SSL normally needs far more pretraining than finetuning; the original '
+                        'recipes used 20-30 pretrain epochs.')
+    p.add_argument('--pretrain-steps-per-epoch', type=int, default=None,
+                   help='steps/epoch for the SSL PRETRAIN stage (default: same as --steps-per-epoch)')
     p.add_argument('--mask-mode', default='biased')
     p.add_argument('--broken', action='store_true',
                    help='pre-Phase-8 behaviour; run names get a _broken suffix')
@@ -55,6 +61,12 @@ def parse_args():
 
 def torchrun(args, model, protocol, run_name, weights=None):
     cfg = CFG.get(protocol, CFG['supervised'])
+    # SSL pretraining gets its own budget when asked for; every other stage uses the shared one.
+    is_pre = protocol.endswith('_pretrain')
+    epochs = (args.pretrain_epochs if is_pre and args.pretrain_epochs is not None
+              else args.num_epochs)
+    steps = (args.pretrain_steps_per_epoch if is_pre and args.pretrain_steps_per_epoch is not None
+             else args.steps_per_epoch)
     cmd = ['torchrun', '--standalone', f'--nproc_per_node={args.nproc}', ENTRY,
            '--model', model, '--protocol', protocol,
            '--train-dir', args.train_dir, '--val-dir', args.val_dir,
@@ -63,10 +75,10 @@ def torchrun(args, model, protocol, run_name, weights=None):
            '--seed', str(run_name.split('seed')[-1].split('_')[0])]
     if weights:
         cmd += ['--weights', weights]
-    if args.steps_per_epoch is not None:
-        cmd += ['--steps-per-epoch', str(args.steps_per_epoch)]
-    if args.num_epochs is not None:
-        cmd += ['--num-epochs', str(args.num_epochs)]
+    if steps is not None:
+        cmd += ['--steps-per-epoch', str(steps)]
+    if epochs is not None:
+        cmd += ['--num-epochs', str(epochs)]
     if args.broken:
         cmd += ['--broken']
     print(f"\n[run] {run_name}\n  {' '.join(cmd)}", flush=True)
