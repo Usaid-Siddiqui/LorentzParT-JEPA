@@ -40,19 +40,33 @@ DEAD_STD = 1e-6          # below this = constant
 PINNED_FRAC = 0.90       # this fraction at one value = effectively constant
 
 
+MIN_MINORITY = 30        # a rare BINARY flag is fine if the minority class is this well populated
+
+
 def stats(v: torch.Tensor):
-    """(std, fraction sitting at the single most common value, min, max)."""
+    """(std, fraction at the most common value, min, max, n_unique, minority_count)."""
     v = v.flatten().float()
     if v.numel() == 0:
-        return 0.0, 1.0, 0.0, 0.0
+        return 0.0, 1.0, 0.0, 0.0, 0, 0
     # round so float noise does not hide a pinned value
     vals, counts = torch.unique((v * 1e4).round(), return_counts=True)
-    return v.std().item(), (counts.max().item() / v.numel()), v.min().item(), v.max().item()
+    top = counts.max().item()
+    return (v.std().item(), top / v.numel(), v.min().item(), v.max().item(),
+            len(vals), int(v.numel() - top))
 
 
-def verdict(std, pinned):
+def verdict(std, pinned, n_unique=None, minority=None):
+    """Is this channel information-free?
+
+    A channel pinned to one value is dead — EXCEPT a genuinely rare binary flag. Jet
+    constituents are ~99% not-an-electron and ~99.4% not-a-muon, so part_isElectron /
+    part_isMuon sit at one value almost always yet still carry real signal. For a binary
+    channel judge the ABSOLUTE size of the minority class, not its fraction.
+    """
     if std < DEAD_STD:
         return "DEAD (constant)"
+    if n_unique is not None and n_unique <= 2:
+        return "ok (rare flag)" if minority >= MIN_MINORITY else f"DEAD (only {minority} minority)"
     if pinned > PINNED_FRAC:
         return f"DEAD ({pinned*100:.1f}% one value)"
     return "ok"
@@ -89,8 +103,8 @@ def main():
     # ---- 1. input channels (valid particles only) ----
     print("1. INPUT CHANNELS"); print(hdr)
     for i, name in enumerate(feats):
-        s, pin, lo, hi = stats(x[..., i][valid])
-        v = verdict(s, pin); bad += [f"input:{name}"] if v != "ok" else []
+        s, pin, lo, hi, nu, mino = stats(x[..., i][valid])
+        v = verdict(s, pin, nu, mino); bad += [f"input:{name}"] if v.startswith("DEAD") else []
         print(f"{name:26}{s:>12.4f}{pin*100:>9.1f}%{lo:>12.3f}{hi:>12.3f}  {v}")
 
     # ---- 2. interaction features (valid off-diagonal pairs only) ----
@@ -101,8 +115,8 @@ def main():
     vp &= ~torch.eye(x.shape[1], dtype=torch.bool).unsqueeze(0)
     print("\n2. INTERACTION FEATURES U"); print(hdr)
     for i, name in enumerate(U_NAMES):
-        s, pin, lo, hi = stats(U[..., i][vp])
-        v = verdict(s, pin); bad += [f"U:{name}"] if v != "ok" else []
+        s, pin, lo, hi, nu, mino = stats(U[..., i][vp])
+        v = verdict(s, pin, nu, mino); bad += [f"U:{name}"] if v.startswith("DEAD") else []
         print(f"{name:26}{s:>12.4f}{pin*100:>9.1f}%{lo:>12.3f}{hi:>12.3f}  {v}")
 
     # ---- 3. multivector slots ----
@@ -111,16 +125,16 @@ def main():
         col = mv[..., i][valid]
         if col.abs().max() == 0:
             continue
-        s, pin, lo, hi = stats(col)
-        v = verdict(s, pin); bad += [f"mv:slot{i}"] if v != "ok" else []
+        s, pin, lo, hi, nu, mino = stats(col)
+        v = verdict(s, pin, nu, mino); bad += [f"mv:slot{i}"] if v.startswith("DEAD") else []
         print(f"{'slot '+str(i):26}{s:>12.4f}{pin*100:>9.1f}%{lo:>12.3f}{hi:>12.3f}  {v}")
 
     # ---- 4. attention gate output ----
     gate = AttentionGate().eval()
     with torch.no_grad():
         g = gate(U, valid)
-    s, pin, lo, hi = stats(g[valid])
-    v = verdict(s, pin); bad += ["gate"] if v != "ok" else []
+    s, pin, lo, hi, nu, mino = stats(g[valid])
+    v = verdict(s, pin, nu, mino); bad += ["gate"] if v.startswith("DEAD") else []
     print("\n4. ATTENTION GATE (random init)"); print(hdr)
     print(f"{'gate':26}{s:>12.4f}{pin*100:>9.1f}%{lo:>12.3f}{hi:>12.3f}  {v}")
 
