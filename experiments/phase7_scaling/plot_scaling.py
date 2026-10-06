@@ -57,8 +57,14 @@ def main():
     p.add_argument("--logs-dir", default="./logs")
     p.add_argument("--scales", nargs="+", default=["100k", "1m", "10m", "100m"])
     p.add_argument("--seeds", nargs="+", type=int, default=[42])
-    p.add_argument("--out", default="experiments/phase7_scaling/results/scaling_accuracy.png")
+    p.add_argument("--out", default=None,
+                   help="default: results/scaling_accuracy[_<tag>].png (a tagged run never "
+                        "overwrites the untagged figure)")
+    p.add_argument("--tag", default=None, help="run-name suffix used at training time, e.g. 'fixed'")
     args = p.parse_args()
+    sfx = f"_{args.tag}" if args.tag else ""
+    if args.out is None:
+        args.out = f"experiments/phase7_scaling/results/scaling_accuracy{sfx}.png"
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     xs = [scale_to_jets(s) for s in args.scales]
 
@@ -70,7 +76,7 @@ def main():
             vals = [v for seed in args.seeds
                     if (v := best_val(os.path.join(
                         args.logs_dir, MODEL_DIR[model], "logging",
-                        f"{model}_{proto}_{scale}_seed{seed}.csv"))) is not None]
+                        f"{model}_{proto}_{scale}_seed{seed}{sfx}.csv"))) is not None]
             means.append(np.mean(vals) if vals else np.nan)
             stds.append(np.std(vals) if len(vals) > 1 else 0.0)
         print(f"{label:26}" + "".join(

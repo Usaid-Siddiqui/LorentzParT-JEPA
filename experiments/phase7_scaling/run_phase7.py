@@ -10,6 +10,11 @@ at successively larger subsets (100k → 1M → 10M → 100M) and setting --step
         --train-dir /data/jetclass/train_100M --val-dir /data/jetclass/val_5M \
         --scale 100m --seeds 42 --nproc 2 --steps-per-epoch 20000 --num-epochs 10
 
+Phase 8 fixed-code rerun — ALWAYS tag it, or it collides with the old run names and every cell
+is skipped as "exists" (0 launches, reported as success):
+
+    python experiments/phase7_scaling/run_phase7.py ... --common-scale --cartesian-mv --tag fixed
+
 Aggregate accuracies with a per-scale table (reuse analyze_phase4-style tooling on the logs).
 """
 
@@ -46,16 +51,20 @@ def parse_args():
                    help='Phase 8 fix: one scale for pT and E (use a distinct --scale label)')
     p.add_argument('--cartesian-mv', action='store_true',
                    help='Phase 8 fix: Cartesian embed_vector (lorentzpart only, needs --common-scale)')
+    p.add_argument('--tag', default=None,
+                   help="suffix for every run name, e.g. 'fixed' -> lorentzpart_scratch_100m_seed42_fixed. "
+                        "REQUIRED when re-running a scale that already has checkpoints: cells whose "
+                        "checkpoint exists are skipped, so an untagged rerun silently does nothing.")
     return p.parse_args()
 
 
-def torchrun(args, model, protocol, run_name, weights=None):
+def torchrun(args, model, protocol, run_name, seed, weights=None):
     cfg = JEPA_CFG if protocol == 'jepa_pretrain' else SUP_CFG
     cmd = ['torchrun', '--standalone', f'--nproc_per_node={args.nproc}', ENTRY,
            '--model', model, '--protocol', protocol,
            '--train-dir', args.train_dir, '--val-dir', args.val_dir,
            '--config', cfg, '--run-name', run_name,
-           '--features', str(args.features), '--seed', str(run_name.split('seed')[-1])]
+           '--features', str(args.features), '--seed', str(seed)]
     if weights:
         cmd += ['--weights', weights]
     if args.steps_per_epoch is not None:
@@ -77,36 +86,37 @@ def torchrun(args, model, protocol, run_name, weights=None):
 
 def main():
     args = parse_args()
+    sfx = f'_{args.tag}' if args.tag else ''
     n_done = n_skip = n_fail = 0
     t0 = time.monotonic()
     for seed in args.seeds:
         for model in args.models:
             for protocol in args.protocols:
                 if protocol == 'scratch':
-                    rn = f'{model}_scratch_{args.scale}_seed{seed}'
+                    rn = f'{model}_scratch_{args.scale}_seed{seed}{sfx}'
                     best = os.path.join(_REPO, CLS_LOGDIR[model], f'{rn}.pt')
                     if os.path.exists(best):
                         print(f"[skip] {rn} — exists", flush=True); n_skip += 1; continue
-                    ok = torchrun(args, model, 'scratch', rn)
+                    ok = torchrun(args, model, 'scratch', rn, seed)
                     n_done += ok; n_fail += (not ok)
                 else:  # jepa: pretrain then finetune
-                    ft = f'{model}_jepa_{args.scale}_seed{seed}'
+                    ft = f'{model}_jepa_{args.scale}_seed{seed}{sfx}'
                     ft_best = os.path.join(_REPO, CLS_LOGDIR[model], f'{ft}.pt')
                     if os.path.exists(ft_best):
                         print(f"[skip] {ft} — exists", flush=True); n_skip += 1; continue
-                    pre = f'{model}_jepapre_{args.scale}_seed{seed}'
+                    pre = f'{model}_jepapre_{args.scale}_seed{seed}{sfx}'
                     pre_best = os.path.join(_REPO, JEPA_BEST, f'{pre}_best.pt')
                     if not os.path.exists(pre_best):
-                        ok = torchrun(args, model, 'jepa_pretrain', pre)
+                        ok = torchrun(args, model, 'jepa_pretrain', pre, seed)
                         n_done += ok; n_fail += (not ok)
                         if not ok:
                             continue
                     else:
                         print(f"[skip] {pre} — encoder exists", flush=True); n_skip += 1
-                    ok = torchrun(args, model, 'jepa_finetune', ft, weights=pre_best)
+                    ok = torchrun(args, model, 'jepa_finetune', ft, seed, weights=pre_best)
                     n_done += ok; n_fail += (not ok)
 
-    print(f"\n{'='*60}\nPhase 7 [{args.scale}]: {n_done} run, {n_skip} skipped, {n_fail} failed "
+    print(f"\n{'='*60}\nPhase 7 [{args.scale}{sfx}]: {n_done} run, {n_skip} skipped, {n_fail} failed "
           f"in {(time.monotonic()-t0)/60:.1f} min.", flush=True)
 
 

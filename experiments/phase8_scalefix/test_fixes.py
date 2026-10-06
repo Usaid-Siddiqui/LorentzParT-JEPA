@@ -172,6 +172,26 @@ def test_callback_kwargs():
           f"patience={cbs[0].patience} (want 7)")
 
 
+# ---------------------------------------------------------------- 7b. optimizer / wrapper kwargs
+def test_optimizer_kwargs():
+    """Flat YAML lr/betas/Lookahead params must reach the optimizer (were silently dropped)."""
+    import yaml
+    from src.utils.get_config import get_optim_from_config, get_optim_wrapper_from_config
+    from src.optim import OPTIM_REGISTRY
+    t = yaml.safe_load(open(os.path.join(
+        _REPO, 'experiments/phase7_scaling/configs/phase7_supervised.yaml')))['train']
+    opt = get_optim_from_config(t['optimizer'], OPTIM_REGISTRY, torch.nn.Linear(2, 2))
+    g = opt.param_groups[0]
+    check("Optimizer lr/betas read from flat YAML",
+          g['lr'] == t['optimizer']['lr'] and list(g['betas']) == list(t['optimizer']['betas']),
+          f"lr={g['lr']} betas={list(g['betas'])} (yaml {t['optimizer']['lr']}, {t['optimizer']['betas']})")
+    w = get_optim_wrapper_from_config(t['optimizer_wrapper'], OPTIM_REGISTRY, opt)
+    check("Lookahead k/alpha read from flat YAML",
+          w._total_la_steps == t['optimizer_wrapper']['la_steps']
+          and w.la_alpha == t['optimizer_wrapper']['la_alpha'],
+          f"k={w._total_la_steps} alpha={w.la_alpha}")
+
+
 # ---------------------------------------------------------------- 8. class-attention query norm
 def test_cls_query_norm():
     from src.models.classifier import ClassAttentionBlock
@@ -241,6 +261,7 @@ def main():
         ("biased masking direction", test_biased_masking),
         ("norm stats", test_norm_stats),
         ("callback kwargs", test_callback_kwargs),
+        ("optimizer kwargs", test_optimizer_kwargs),
         ("class-attention query norm", test_cls_query_norm),
         ("conservation loss knobs", test_conservation_loss),
         ("lookahead state", test_lookahead_state),

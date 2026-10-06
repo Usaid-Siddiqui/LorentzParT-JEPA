@@ -13,6 +13,7 @@ Reads checkpoints from logs/<ModelDir>/best/<model>_<protocol>_<scale>_seed<N>.p
 """
 
 import argparse
+import csv
 import os
 import sys
 
@@ -34,16 +35,19 @@ MODEL_CLS = {"part": ParticleTransformer, "lorentzpart": LorentzParT}
 CELLS = [("part", "scratch"), ("part", "jepa"), ("lorentzpart", "scratch"), ("lorentzpart", "jepa")]
 
 
-def load_model(model, ckpt, n_extra, device):
+def load_model(model, ckpt, n_extra, device, cartesian_mv=False):
+    # cartesian_mv has NO parameters, so load_state_dict cannot detect a mismatch — it must
+    # mirror the flag the run was trained with, or the predictions are silently wrong.
+    extra = dict(cartesian_mv=cartesian_mv) if model == 'lorentzpart' else {}
     m = MODEL_CLS[model](**T7.ARCH, num_cls_layers=2, num_classes=10,
-                         ragged_pair_embed=True, num_extra_features=n_extra)
+                         ragged_pair_embed=True, num_extra_features=n_extra, **extra)
     m.load_state_dict(torch.load(ckpt, map_location=device))
     return m.to(device).eval()
 
 
 @torch.no_grad()
-def evaluate(m, val_dir, feats, device, max_jets, bs, workers):
-    ds = StreamingJetClassDataset(val_dir, particle_features=feats, norm_dict=T7.NORM_DICT,
+def evaluate(m, val_dir, feats, device, max_jets, bs, workers, norm_dict):
+    ds = StreamingJetClassDataset(val_dir, particle_features=feats, norm_dict=norm_dict,
                                   normalize=T7.NORMALIZE, mask_mode=None, seed=0)
     dl = DataLoader(ds, batch_size=bs, num_workers=workers)
     probs, trues, n = [], [], 0
@@ -60,6 +64,20 @@ def evaluate(m, val_dir, feats, device, max_jets, bs, workers):
     return roc_auc_score(t, p, multi_class="ovo", average="macro"), accuracy_score(t, p.argmax(1)), len(t)
 
 
+def best_logged_val(logs_dir, model, run):
+    """Best val_metric in the run's training CSV (None if the log is missing)."""
+    path = os.path.join(logs_dir, MODEL_DIR[model], 'logging', f'{run}.csv')
+    if not os.path.exists(path):
+        return None
+    vals = []
+    for row in csv.DictReader(open(path)):
+        try:
+            vals.append(float(row['val_metric']))
+        except (KeyError, ValueError, TypeError):
+            pass
+    return max(vals) if vals else None
+
+
 def main():
     p = argparse.ArgumentParser(description="Phase 7 ROC AUC eval")
     p.add_argument("--val-dir", required=True)
@@ -70,7 +88,15 @@ def main():
     p.add_argument("--max-jets", type=int, default=500000, help="cap val jets for a stable AUC")
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--num-workers", type=int, default=4)
+    p.add_argument("--tag", default=None, help="run-name suffix used at training time, e.g. 'fixed'")
+    p.add_argument("--common-scale", action="store_true",
+                   help="MUST match training: Phase 8 pT/E common-scale normalisation")
+    p.add_argument("--cartesian-mv", action="store_true",
+                   help="MUST match training: Cartesian embed_vector for lorentzpart")
     args = p.parse_args()
+    sfx = f"_{args.tag}" if args.tag else ""
+    norm = T7.NORM_DICT_COMMON if args.common_scale else T7.NORM_DICT
+    print(f"[eval] tag={args.tag} common_scale={args.common_scale} cartesian_mv={args.cartesian_mv}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     feats = T7.FEATURES[args.features]
@@ -81,16 +107,22 @@ def main():
     for model, proto in CELLS:
         aucs, accs = [], []
         for seed in args.seeds:
-            run = f"{model}_{proto}_{args.scale}_seed{seed}"
+            run = f"{model}_{proto}_{args.scale}_seed{seed}{sfx}"
             ckpt = os.path.join(args.logs_dir, MODEL_DIR[model], "best", f"{run}.pt")
             if not os.path.exists(ckpt):
                 print(f"{model+'_'+proto:26}{seed:>6}{'— (no ckpt)':>30}")
                 continue
-            auc, acc, n = evaluate(load_model(model, ckpt, n_extra, device),
+            auc, acc, n = evaluate(load_model(model, ckpt, n_extra, device, args.cartesian_mv),
                                    args.val_dir, feats, device, args.max_jets,
-                                   args.batch_size, args.num_workers)
+                                   args.batch_size, args.num_workers, norm)
             aucs.append(auc); accs.append(acc)
             print(f"{model+'_'+proto:26}{seed:>6}{auc:>11.4f}{acc:>9.4f}{n:>10}", flush=True)
+            # Guard: eval accuracy should reproduce the training log's best val accuracy. A large
+            # gap almost always means the eval flags don't match how the run was trained.
+            logged = best_logged_val(args.logs_dir, model, run)
+            if logged is not None and abs(acc - logged) > 0.02:
+                print(f"    [WARN] eval acc {acc:.4f} vs training best val {logged:.4f} - check that "
+                      f"--common-scale / --cartesian-mv / --tag match the training run", flush=True)
         if aucs:
             agg[(model, proto)] = (np.mean(aucs), np.std(aucs), len(aucs))
 

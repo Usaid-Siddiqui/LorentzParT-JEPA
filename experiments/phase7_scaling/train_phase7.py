@@ -121,6 +121,12 @@ def main():
         tcfg = TrainConfig.from_dict(yaml.safe_load(f)['train'])
     if args.num_epochs is not None:
         tcfg.num_epochs = args.num_epochs
+        # Keep the cosine schedule in step with the actual epoch count: the configs ship
+        # T_max: 30 for their default 30 epochs, so overriding epochs (e.g. the 10M rung's 4)
+        # without this left the LR barely annealed (0.000997 -> 0.000957 over 4 epochs).
+        sch = getattr(tcfg, 'scheduler', None)
+        if isinstance(sch, dict) and 'T_max' in sch:
+            sch['T_max'] = args.num_epochs
     if args.steps_per_epoch is not None:
         tcfg.steps_per_epoch = args.steps_per_epoch
 
@@ -138,7 +144,8 @@ def main():
               f"features={args.features} (n_extra={n_extra}) common_scale={args.common_scale} "
               f"cartesian_mv={args.cartesian_mv} "
               f"world_size={world_size} "
-              f"steps/epoch={tcfg.steps_per_epoch} epochs={tcfg.num_epochs} amp={tcfg.amp}", flush=True)
+              f"steps/epoch={tcfg.steps_per_epoch} epochs={tcfg.num_epochs} "
+              f"T_max={(tcfg.scheduler or {}).get('T_max')} amp={tcfg.amp}", flush=True)
 
     trainer.train()
     cleanup_ddp()
