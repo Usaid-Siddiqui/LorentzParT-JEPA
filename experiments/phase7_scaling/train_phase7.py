@@ -99,6 +99,47 @@ def build_model(args, n_extra):
                weights=args.weights if args.protocol == 'jepa_finetune' else None)
 
 
+def run_meta(args, tcfg):
+    """Everything that defines this run. Stored in each checkpoint and compared on resume."""
+    return dict(model=args.model, protocol=args.protocol, features=args.features, seed=args.seed,
+                common_scale=args.common_scale, cartesian_mv=args.cartesian_mv,
+                num_epochs=tcfg.num_epochs, steps_per_epoch=tcfg.steps_per_epoch,
+                weights=os.path.basename(args.weights) if args.weights else None)
+
+
+def maybe_resume(trainer, meta, rank):
+    """Continue from this run's per-epoch checkpoint if one exists. Returns 'done' if the run
+    already finished, 'resumed', or 'fresh'.
+
+    A long sweep on a shared server gets killed (this one died 4 epochs into a 16 h stage when the
+    Jupyter server restarted). Without this every kill costs the whole stage. Refuses to continue
+    a checkpoint whose recorded config differs from the current one — resuming a different
+    experiment under the same run name is exactly the silent failure this code base keeps hitting.
+    """
+    path = trainer.checkpoint_path
+    if not path or not os.path.exists(path):
+        return 'fresh'
+    saved = torch.load(path, map_location='cpu', weights_only=False)
+    saved_meta = saved.get('run_meta')
+    if saved_meta != meta:
+        diff = ({k: (saved_meta.get(k), v) for k, v in meta.items() if saved_meta.get(k) != v}
+                if isinstance(saved_meta, dict) else 'checkpoint has no run metadata (written by older code)')
+        raise SystemExit(
+            f"[phase7] REFUSING to resume {trainer.run_name}: checkpoint config != current config.\n"
+            f"         differences (saved, current): {diff}\n"
+            f"         To start this cell over, delete its three files:\n"
+            f"           {trainer.checkpoint_path}\n           {trainer.best_model_path}\n"
+            f"           {trainer.logging_path}")
+    if saved['epoch'] + 1 >= meta['num_epochs']:
+        return 'done'
+    del saved
+    trainer.load_checkpoint(path)
+    if rank == 0:
+        print(f"[phase7] RESUMING {trainer.run_name} at epoch {trainer.start_epoch + 1}/"
+              f"{meta['num_epochs']} (best val_loss so far {trainer.best_val_loss:.4f})", flush=True)
+    return 'resumed'
+
+
 def main():
     args = parse_args()
     set_seed(args.seed)
@@ -138,6 +179,13 @@ def main():
     else:
         trainer = JetClassTrainer(**common, metric=accuracy_metric_ce)
     trainer._set_logging_paths(args.run_name)
+    trainer.run_meta = run_meta(args, tcfg)
+    state = maybe_resume(trainer, trainer.run_meta, local_rank)
+    if state == 'done':
+        if local_rank == 0:
+            print(f"[phase7] {args.run_name} already complete — nothing to do.", flush=True)
+        cleanup_ddp()
+        return
 
     if local_rank == 0:
         print(f"[phase7] {args.run_name}: model={args.model} protocol={args.protocol} "

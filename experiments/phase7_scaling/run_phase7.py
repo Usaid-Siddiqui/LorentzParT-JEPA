@@ -19,10 +19,13 @@ Aggregate accuracies with a per-scale table (reuse analyze_phase4-style tooling 
 """
 
 import argparse
+import csv
 import os
 import subprocess
 import sys
 import time
+
+import yaml
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.dirname(os.path.dirname(_HERE))
@@ -33,6 +36,38 @@ ENTRY = 'experiments/phase7_scaling/train_phase7.py'
 # model → (classification-log dir for the supervised best checkpoint)
 CLS_LOGDIR = {'part': 'logs/ParticleTransformer/best', 'lorentzpart': 'logs/LorentzParT/best'}
 JEPA_BEST = 'logs/ParticleJEPA/best'
+
+
+def epochs_logged(best_dir, run_name):
+    """Distinct epochs in a run's training CSV (0 if there is no log)."""
+    path = os.path.join(_REPO, os.path.dirname(best_dir), 'logging', f'{run_name}.csv')
+    if not os.path.exists(path):
+        return 0
+    seen = set()
+    with open(path, newline='') as f:
+        for row in csv.reader(f):
+            try:
+                seen.add(int(float(row[0])))
+            except (ValueError, IndexError):
+                pass                              # header / malformed line
+    return len(seen)
+
+
+def target_epochs(args, cfg):
+    if args.num_epochs is not None:
+        return args.num_epochs
+    with open(os.path.join(_REPO, cfg)) as f:
+        return int(yaml.safe_load(f)['train']['num_epochs'])
+
+
+def is_complete(args, best_dir, run_name, cfg, artifact):
+    """A cell is done only when it has logged EVERY epoch and its artifact exists.
+
+    The old test was "the best checkpoint exists" — but that file is written the first time
+    validation improves, i.e. after epoch 1. A cell killed mid-training therefore looked finished,
+    and a relaunch would have skipped it and reported a 4-epoch model as the 30-epoch result.
+    """
+    return os.path.exists(artifact) and epochs_logged(best_dir, run_name) >= target_epochs(args, cfg)
 
 
 def parse_args():
@@ -56,6 +91,13 @@ def parse_args():
                         "REQUIRED when re-running a scale that already has checkpoints: cells whose "
                         "checkpoint exists are skipped, so an untagged rerun silently does nothing.")
     return p.parse_args()
+
+
+def note_partial(args, best_dir, run_name, cfg):
+    n = epochs_logged(best_dir, run_name)
+    if n:
+        print(f"[partial] {run_name}: {n}/{target_epochs(args, cfg)} epochs logged — "
+              f"the trainer will resume from its checkpoint", flush=True)
 
 
 def torchrun(args, model, protocol, run_name, seed, weights=None):
@@ -95,24 +137,27 @@ def main():
                 if protocol == 'scratch':
                     rn = f'{model}_scratch_{args.scale}_seed{seed}{sfx}'
                     best = os.path.join(_REPO, CLS_LOGDIR[model], f'{rn}.pt')
-                    if os.path.exists(best):
-                        print(f"[skip] {rn} — exists", flush=True); n_skip += 1; continue
+                    if is_complete(args, CLS_LOGDIR[model], rn, SUP_CFG, best):
+                        print(f"[skip] {rn} — complete", flush=True); n_skip += 1; continue
+                    note_partial(args, CLS_LOGDIR[model], rn, SUP_CFG)
                     ok = torchrun(args, model, 'scratch', rn, seed)
                     n_done += ok; n_fail += (not ok)
                 else:  # jepa: pretrain then finetune
                     ft = f'{model}_jepa_{args.scale}_seed{seed}{sfx}'
                     ft_best = os.path.join(_REPO, CLS_LOGDIR[model], f'{ft}.pt')
-                    if os.path.exists(ft_best):
-                        print(f"[skip] {ft} — exists", flush=True); n_skip += 1; continue
+                    if is_complete(args, CLS_LOGDIR[model], ft, SUP_CFG, ft_best):
+                        print(f"[skip] {ft} — complete", flush=True); n_skip += 1; continue
                     pre = f'{model}_jepapre_{args.scale}_seed{seed}{sfx}'
                     pre_best = os.path.join(_REPO, JEPA_BEST, f'{pre}_best.pt')
-                    if not os.path.exists(pre_best):
+                    if not is_complete(args, JEPA_BEST, pre, JEPA_CFG, pre_best):
+                        note_partial(args, JEPA_BEST, pre, JEPA_CFG)
                         ok = torchrun(args, model, 'jepa_pretrain', pre, seed)
                         n_done += ok; n_fail += (not ok)
                         if not ok:
                             continue
                     else:
-                        print(f"[skip] {pre} — encoder exists", flush=True); n_skip += 1
+                        print(f"[skip] {pre} — encoder complete", flush=True); n_skip += 1
+                    note_partial(args, CLS_LOGDIR[model], ft, SUP_CFG)
                     ok = torchrun(args, model, 'jepa_finetune', ft, seed, weights=pre_best)
                     n_done += ok; n_fail += (not ok)
 

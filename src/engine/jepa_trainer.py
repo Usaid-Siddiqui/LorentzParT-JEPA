@@ -20,7 +20,7 @@ import torch
 from torch import nn
 from torch.distributed import all_gather, all_gather_object
 
-from .trainer import Trainer
+from .trainer import Trainer, atomic_torch_save
 from ..utils import cleanup_ddp
 from ..utils.data import JetClassDistributedSampler
 
@@ -310,8 +310,9 @@ class JEPATrainer(Trainer):
             'history': self.history,
             'ema_momentum_start': self.ema_momentum_start,
             'ema_momentum_end': self.ema_momentum_end,
+            'run_meta': getattr(self, 'run_meta', None),
         }
-        torch.save(checkpoint, self.checkpoint_path)
+        atomic_torch_save(checkpoint, self.checkpoint_path)
 
     @torch.no_grad()
     def evaluate(self, plot=None):

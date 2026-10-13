@@ -34,6 +34,14 @@ from ..utils.data import JetClassDistributedSampler
 from ..utils.viz import *
 
 
+def atomic_torch_save(obj, path: str) -> None:
+    """torch.save via a temp file + rename, so a process killed mid-write leaves the previous
+    checkpoint intact instead of a truncated file (the rename is atomic on POSIX)."""
+    tmp = f"{path}.tmp"
+    torch.save(obj, tmp)
+    os.replace(tmp, path)
+
+
 def _seed_numpy_worker(worker_id: int) -> None:
     """Give each DataLoader worker its own numpy seed (PyTorch only reseeds torch,
     so on fork every worker inherits the same numpy state — Phase 8)."""
@@ -365,12 +373,17 @@ class Trainer:
                 'model_state_dict': model_state,
                 'optimizer_state_dict': self.optimizer.state_dict(),
                 'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
-                'history': self.history
+                'history': self.history,
+                # What produced this checkpoint, so a resume can refuse a mismatched config
+                # instead of silently continuing a different experiment under the same name.
+                'run_meta': getattr(self, 'run_meta', None),
             }
-            torch.save(checkpoint, self.checkpoint_path)
+            atomic_torch_save(checkpoint, self.checkpoint_path)
 
     def load_checkpoint(self, checkpoint_path: str):
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        # our own file: plain containers, but history may hold numpy scalars, which the
+        # weights_only=True default of newer torch refuses to unpickle
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         self._set_logging_paths(checkpoint['run_name'])
         target = self.model.module if self._is_distributed else self.model
         target.load_state_dict(checkpoint['model_state_dict'])
@@ -380,6 +393,33 @@ class Trainer:
 
         self.start_epoch = checkpoint['epoch'] + 1
         self.history = checkpoint['history']
+
+        # Resume must not forget the best validation loss, or the first resumed epoch would
+        # overwrite the best checkpoint even when it is worse than an earlier epoch.
+        vals = self.history.get('val_loss') or []
+        if vals:
+            self.best_val_loss = min(vals)
+            if hasattr(self, 'best_epoch'):
+                self.best_epoch = self.history['epoch'][vals.index(min(vals))]
+        self._truncate_log_to(self.start_epoch)
+
+    def _truncate_log_to(self, last_epoch: int):
+        """Drop CSV rows past the checkpointed epoch so a resumed run never logs an epoch twice."""
+        if self.rank != 0 or not os.path.exists(self.logging_path):
+            return
+        with open(self.logging_path, newline='') as f:
+            rows = list(csv.reader(f))
+        if not rows:
+            return
+        header, kept = rows[0], []
+        for r in rows[1:]:
+            try:
+                if int(float(r[0])) <= last_epoch:
+                    kept.append(r)
+            except (ValueError, IndexError):
+                continue                      # stray header / malformed line
+        with open(self.logging_path, 'w', newline='') as f:
+            csv.writer(f).writerows([header] + kept)
     
     def load_best_model(self, best_model_path: str):
         run_name = os.path.splitext(os.path.basename(best_model_path))[0]

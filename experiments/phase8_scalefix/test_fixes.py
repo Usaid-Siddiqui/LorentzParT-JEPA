@@ -252,6 +252,64 @@ def test_probe_14_features():
     check("LinearProbeModel works with 14 features", ok, detail)
 
 
+# ---------------------------------------------------------------- 13. sweep resume safety
+def _load(name, rel):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, os.path.join(_REPO, rel))
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    return mod
+
+
+def test_partial_cell_not_complete():
+    """A cell killed mid-training has a best checkpoint from epoch 1 — it must NOT count as done."""
+    import tempfile, types
+    rp = _load("run_phase7", "experiments/phase7_scaling/run_phase7.py")
+    root = tempfile.mkdtemp(); rp._REPO = root
+    best_dir = "logs/ParticleTransformer/best"
+    for sub in ("best", "logging"):
+        os.makedirs(os.path.join(root, "logs/ParticleTransformer", sub))
+    def cell(run, epochs):
+        with open(os.path.join(root, "logs/ParticleTransformer/logging", f"{run}.csv"), "w") as f:
+            f.write("epoch,val_metric\n" + "".join(f"{e},0.8\n" for e in range(1, epochs + 1)))
+        art = os.path.join(root, best_dir, f"{run}.pt"); open(art, "w").close()
+        return art
+    args = types.SimpleNamespace(num_epochs=30)
+    done = rp.is_complete(args, best_dir, "full", rp.SUP_CFG, cell("full", 30))
+    part = rp.is_complete(args, best_dir, "partial", rp.SUP_CFG, cell("partial", 4))
+    check("Sweep: 30/30-epoch cell is complete", done)
+    check("Sweep: 4/30-epoch cell with a best checkpoint is NOT complete", not part)
+
+
+def test_resume_guards():
+    """Resume refuses an old-format / mismatched checkpoint; log truncation drops replayed epochs."""
+    import tempfile, types
+    sys.path.insert(0, os.path.join(_REPO, "experiments", "phase7_scaling"))
+    T7 = _load("train_phase7_t", "experiments/phase7_scaling/train_phase7.py")
+    from src.engine.trainer import Trainer
+    d = tempfile.mkdtemp()
+    ck, log = os.path.join(d, "c.pt"), os.path.join(d, "l.csv")
+    meta = dict(model="part", num_epochs=30)
+    tr = types.SimpleNamespace(checkpoint_path=ck, best_model_path="b.pt", logging_path=log, run_name="r")
+    torch.save({"epoch": 3, "history": {}}, ck)                       # no run_meta = pre-resume code
+    try:
+        T7.maybe_resume(tr, meta, 0); refused = False
+    except SystemExit as e:
+        refused = "REFUSING" in str(e)
+    check("Resume: checkpoint without run metadata is refused", refused)
+    torch.save({"epoch": 3, "history": {}, "run_meta": dict(meta, model="lorentzpart")}, ck)
+    try:
+        T7.maybe_resume(tr, meta, 0); refused = False
+    except SystemExit as e:
+        refused = "model" in str(e)
+    check("Resume: mismatched config is refused and names the field", refused)
+    with open(log, "w") as f:
+        f.write("epoch,val\n1,a\n2,b\n3,c\nepoch,val\n4,d\n5,e\n")
+    Trainer._truncate_log_to(types.SimpleNamespace(rank=0, logging_path=log), 4)
+    kept = [l.split(",")[0] for l in open(log).read().split()]
+    check("Resume: log truncated to the checkpointed epoch", kept == ["epoch", "1", "2", "3", "4"],
+          f"rows={kept}")
+
+
 def main():
     tests = [
         ("interaction matrix liveness", test_interaction_alive),
@@ -267,6 +325,8 @@ def main():
         ("lookahead state", test_lookahead_state),
         ("fp16 scaler", test_fp16_scaler),
         ("14-feature probes", test_probe_14_features),
+        ("sweep completion", test_partial_cell_not_complete),
+        ("resume guards", test_resume_guards),
     ]
     for title, fn in tests:
         print(f"\n== {title} ==")
