@@ -98,6 +98,7 @@ class ParticleJEPA(nn.Module):
         num_extra_features: int = 0,
         encoder_type: str = 'lorentz',
         cartesian_mv: bool = False,
+        bool_padding_mask: bool = False,
     ):
         super().__init__()
 
@@ -105,6 +106,7 @@ class ParticleJEPA(nn.Module):
             pair_embed_dims = [64, 64, 64]
 
         self.ema_momentum = ema_momentum
+        self.bool_padding_mask = bool_padding_mask
         self.use_attention_gate = use_attention_gate
         # Extra per-particle scalars beyond the 4-vector (Phase 6: 4 displacement + 6 PID).
         # They ride alongside the (multi)vector into the encoder proj; the processor and
@@ -253,6 +255,14 @@ class ParticleJEPA(nn.Module):
             if E > 0:
                 masked_extras[batch_idx, mask_idx[:, k]] = 0.0
             context_padding_mask[batch_idx, mask_idx[:, k]] = 0.0
+
+        # Phase 8: optionally make padding a true mask. PyTorch ADDS a float key_padding_mask
+        # to the attention scores; only a bool mask excludes keys. The float (E == 0) mask
+        # gave every padded slot +1 instead of -inf (~86% of attention on padding at init).
+        # Off by default so earlier runs reproduce.
+        if self.bool_padding_mask:
+            full_padding_mask = full_padding_mask.bool()
+            context_padding_mask = context_padding_mask.bool()
 
         # ---------- Process inputs ----------
         full_mv, U_full = self.processor(x4)

@@ -181,7 +181,8 @@ class ParticleTransformer(nn.Module):
         weights: Optional[str] = None,
         inference: Optional[bool] = False,
         ragged_pair_embed: Optional[bool] = None,
-        num_extra_features: Optional[int] = None
+        num_extra_features: Optional[int] = None,
+        bool_padding_mask: Optional[bool] = None
     ):
         super(ParticleTransformer, self).__init__()
 
@@ -204,6 +205,7 @@ class ParticleTransformer(nn.Module):
             self.inference = inference if inference is not None else config.inference
             self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else getattr(config, 'ragged_pair_embed', False)
             self.num_extra_features = num_extra_features if num_extra_features is not None else getattr(config, 'num_extra_features', 0)
+            self.bool_padding_mask = bool_padding_mask if bool_padding_mask is not None else getattr(config, 'bool_padding_mask', False)
         else:
             self.max_num_particles = max_num_particles if max_num_particles is not None else 128
             self.num_particle_features = num_particle_features if num_particle_features is not None else 4
@@ -222,6 +224,7 @@ class ParticleTransformer(nn.Module):
             self.inference = inference if inference is not None else False
             self.ragged_pair_embed = ragged_pair_embed if ragged_pair_embed is not None else False
             self.num_extra_features = num_extra_features if num_extra_features is not None else 0
+            self.bool_padding_mask = bool_padding_mask if bool_padding_mask is not None else False
 
         # Initialize the class token
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim), requires_grad=True)
@@ -286,6 +289,13 @@ class ParticleTransformer(nn.Module):
         if mask_idx is not None:
             batch_indices = torch.arange(x.size(0), device=x.device)
             padding_mask[batch_indices, mask_idx] = 0.0
+
+        # Phase 8: optionally make padding a true mask. PyTorch ADDS a float key_padding_mask
+        # to the attention scores; only a bool mask excludes keys. The float (E == 0) mask
+        # gave every padded slot +1 instead of -inf (~86% of attention on padding at init).
+        # Off by default so earlier runs reproduce.
+        if self.bool_padding_mask:
+            padding_mask = padding_mask.bool()
 
         # Process particles to get interaction embeddings
         pair_valid = x[..., 3] > 0          # processor's own validity test (energy > 0)

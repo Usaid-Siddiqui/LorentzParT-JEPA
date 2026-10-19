@@ -35,10 +35,11 @@ MODEL_CLS = {"part": ParticleTransformer, "lorentzpart": LorentzParT}
 CELLS = [("part", "scratch"), ("part", "jepa"), ("lorentzpart", "scratch"), ("lorentzpart", "jepa")]
 
 
-def load_model(model, ckpt, n_extra, device, cartesian_mv=False):
+def load_model(model, ckpt, n_extra, device, cartesian_mv=False, bool_padding_mask=False):
     # cartesian_mv has NO parameters, so load_state_dict cannot detect a mismatch — it must
     # mirror the flag the run was trained with, or the predictions are silently wrong.
     extra = dict(cartesian_mv=cartesian_mv) if model == 'lorentzpart' else {}
+    extra['bool_padding_mask'] = bool_padding_mask     # changes outputs; also has no parameters
     m = MODEL_CLS[model](**T7.ARCH, num_cls_layers=2, num_classes=10,
                          ragged_pair_embed=True, num_extra_features=n_extra, **extra)
     m.load_state_dict(torch.load(ckpt, map_location=device))
@@ -93,6 +94,8 @@ def main():
                    help="MUST match training: Phase 8 pT/E common-scale normalisation")
     p.add_argument("--cartesian-mv", action="store_true",
                    help="MUST match training: Cartesian embed_vector for lorentzpart")
+    p.add_argument("--bool-padding-mask", action="store_true",
+                   help="MUST match training: boolean (true) padding mask")
     args = p.parse_args()
     sfx = f"_{args.tag}" if args.tag else ""
     norm = T7.NORM_DICT_COMMON if args.common_scale else T7.NORM_DICT
@@ -112,7 +115,8 @@ def main():
             if not os.path.exists(ckpt):
                 print(f"{model+'_'+proto:26}{seed:>6}{'— (no ckpt)':>30}")
                 continue
-            auc, acc, n = evaluate(load_model(model, ckpt, n_extra, device, args.cartesian_mv),
+            auc, acc, n = evaluate(load_model(model, ckpt, n_extra, device, args.cartesian_mv,
+                                              args.bool_padding_mask),
                                    args.val_dir, feats, device, args.max_jets,
                                    args.batch_size, args.num_workers, norm)
             aucs.append(auc); accs.append(acc)

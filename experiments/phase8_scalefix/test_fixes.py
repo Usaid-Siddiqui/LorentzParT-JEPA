@@ -310,6 +310,23 @@ def test_resume_guards():
           f"rows={kept}")
 
 
+def test_bool_padding_mask():
+    """--bool-padding-mask: outputs must not depend on padded slots (the float mask ADDS to scores)."""
+    from src.models import ParticleTransformer
+    torch.manual_seed(0)
+    X = torch.rand(2, 128, 14) + 0.5; X[:, 45:, :] = 0.0
+    X2 = X.clone(); X2[:, 45:, :3] = torch.randn(2, 83, 3) * 3     # E stays 0 -> still padding
+    res = {}
+    for b in (False, True):
+        torch.manual_seed(1)
+        m = ParticleTransformer(num_classes=10, ragged_pair_embed=True, num_extra_features=10,
+                                bool_padding_mask=b).eval()
+        with torch.no_grad():
+            res[b] = (m(X) - m(X2)).abs().max().item()
+    check("Bool padding mask: output independent of padded slots", res[True] == 0.0,
+          f"max delta {res[True]:.1e} (float mask: {res[False]:.1e})")
+
+
 def main():
     tests = [
         ("interaction matrix liveness", test_interaction_alive),
@@ -327,6 +344,7 @@ def main():
         ("14-feature probes", test_probe_14_features),
         ("sweep completion", test_partial_cell_not_complete),
         ("resume guards", test_resume_guards),
+        ("bool padding mask", test_bool_padding_mask),
     ]
     for title, fn in tests:
         print(f"\n== {title} ==")

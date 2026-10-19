@@ -82,6 +82,8 @@ def parse_args():
                    help='Phase 8: scale pT and E by the same mean so ln_m2 is a real feature')
     p.add_argument('--cartesian-mv', action='store_true',
                    help='Phase 8: feed embed_vector (E,px,py,pz); lorentzpart only, needs --common-scale')
+    p.add_argument('--bool-padding-mask', action='store_true',
+                   help='Phase 8: exclude padded slots from attention (the float mask ADDED +1 to them)')
     return p.parse_args()
 
 
@@ -90,10 +92,11 @@ def build_model(args, n_extra):
     if args.protocol == 'jepa_pretrain':
         return ParticleJEPA(**ARCH, **JEPA_EXTRA, ragged_pair_embed=True,
                             num_extra_features=n_extra, encoder_type=encoder_type,
-                            cartesian_mv=args.cartesian_mv)
+                            cartesian_mv=args.cartesian_mv, bool_padding_mask=args.bool_padding_mask)
     # supervised (scratch or jepa_finetune): classification model, optionally encoder-initialized
     cls = ParticleTransformer if args.model == 'part' else LorentzParT
     extra = {} if args.model == 'part' else dict(cartesian_mv=args.cartesian_mv)
+    extra['bool_padding_mask'] = args.bool_padding_mask
     return cls(**ARCH, num_cls_layers=2, num_classes=args.num_classes,
                ragged_pair_embed=True, num_extra_features=n_extra, **extra,
                weights=args.weights if args.protocol == 'jepa_finetune' else None)
@@ -101,10 +104,15 @@ def build_model(args, n_extra):
 
 def run_meta(args, tcfg):
     """Everything that defines this run. Stored in each checkpoint and compared on resume."""
-    return dict(model=args.model, protocol=args.protocol, features=args.features, seed=args.seed,
+    meta = dict(model=args.model, protocol=args.protocol, features=args.features, seed=args.seed,
                 common_scale=args.common_scale, cartesian_mv=args.cartesian_mv,
                 num_epochs=tcfg.num_epochs, steps_per_epoch=tcfg.steps_per_epoch,
                 weights=os.path.basename(args.weights) if args.weights else None)
+    if args.bool_padding_mask:
+        # recorded only when ON, so checkpoints written before this flag existed (float mask)
+        # still match and can be resumed; an ON run can never resume an OFF checkpoint.
+        meta['bool_padding_mask'] = True
+    return meta
 
 
 def maybe_resume(trainer, meta, rank):
@@ -190,7 +198,7 @@ def main():
     if local_rank == 0:
         print(f"[phase7] {args.run_name}: model={args.model} protocol={args.protocol} "
               f"features={args.features} (n_extra={n_extra}) common_scale={args.common_scale} "
-              f"cartesian_mv={args.cartesian_mv} "
+              f"cartesian_mv={args.cartesian_mv} bool_padding_mask={args.bool_padding_mask} "
               f"world_size={world_size} "
               f"steps/epoch={tcfg.steps_per_epoch} epochs={tcfg.num_epochs} "
               f"T_max={(tcfg.scheduler or {}).get('T_max')} amp={tcfg.amp}", flush=True)

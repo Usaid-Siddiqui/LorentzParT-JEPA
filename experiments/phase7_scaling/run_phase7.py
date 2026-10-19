@@ -86,6 +86,8 @@ def parse_args():
                    help='Phase 8 fix: one scale for pT and E (use a distinct --scale label)')
     p.add_argument('--cartesian-mv', action='store_true',
                    help='Phase 8 fix: Cartesian embed_vector (lorentzpart only, needs --common-scale)')
+    p.add_argument('--bool-padding-mask', action='store_true',
+                   help='Phase 8: exclude padded slots from attention (use with a NEW --tag)')
     p.add_argument('--tag', default=None,
                    help="suffix for every run name, e.g. 'fixed' -> lorentzpart_scratch_100m_seed42_fixed. "
                         "REQUIRED when re-running a scale that already has checkpoints: cells whose "
@@ -117,6 +119,8 @@ def torchrun(args, model, protocol, run_name, seed, weights=None):
         cmd += ['--common-scale']
     if args.cartesian_mv:
         cmd += ['--cartesian-mv']
+    if args.bool_padding_mask:
+        cmd += ['--bool-padding-mask']
     print(f"\n[run] {run_name}\n  {' '.join(cmd)}", flush=True)
     try:
         subprocess.run(cmd, cwd=_REPO, check=True)
