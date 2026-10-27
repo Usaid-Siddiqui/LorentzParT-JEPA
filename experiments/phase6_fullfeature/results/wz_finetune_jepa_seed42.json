@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.74525,
+  "test_auc": 0.818217555,
+  "bkg_rej_at_0.5": 9.22509225092251,
+  "signal_idx": 1,
+  "best_val_acc": 0.7444,
+  "train_time_s": 847.4158608587459,
+  "task": "wz",
+  "protocol": "finetune",
+  "encoder": "./logs/ParticleJEPA/best/jepa_full_seed42_best.pt",
+  "encoder_label": "jepa",
+  "seed": 42,
+  "k": 2,
+  "run_name": "wz_finetune_jepa_seed42"
+}

@@ -1,0 +1,15 @@
+{
+  "test_acc": 0.69125,
+  "test_auc": 0.7613395900000001,
+  "bkg_rej_at_0.5": 6.042296072507552,
+  "signal_idx": 1,
+  "best_val_acc": 0.6941,
+  "train_time_s": 448.48311332496814,
+  "task": "wz",
+  "protocol": "finetune",
+  "encoder": "scratch",
+  "encoder_label": "scratch",
+  "seed": 456,
+  "k": 2,
+  "run_name": "wz_finetune_scratch_disp_seed456"
+}
