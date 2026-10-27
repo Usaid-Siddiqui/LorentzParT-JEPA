@@ -185,9 +185,9 @@ def scores(y, probs, base_pred):
 
 def main():
     p = argparse.ArgumentParser(description="Robustness of trained models to frame changes")
-    p.add_argument("--val-dir", required=True)
+    p.add_argument("--val-dir", default=None)
     p.add_argument("--logs-dir", default="./logs")
-    p.add_argument("--scale", required=True)
+    p.add_argument("--scale", default=None)
     p.add_argument("--seeds", nargs="+", type=int, default=[42])
     p.add_argument("--tag", default=None)
     p.add_argument("--models", nargs="+", default=["part", "lorentzpart"], choices=["part", "lorentzpart"])
@@ -200,7 +200,18 @@ def main():
     p.add_argument("--batch-size", type=int, default=512)
     p.add_argument("--num-workers", type=int, default=4)
     p.add_argument("--out", default=None, help="CSV path (default results/frames_<scale><_tag>.csv)")
+    p.add_argument("--replot", default=None,
+                   help="redraw the figure from an existing results CSV, without evaluating any model")
     args = p.parse_args()
+
+    if args.replot:
+        rows = load_rows(args.replot)
+        cells = sorted({(r["model"], r["protocol"]) for r in rows})
+        base_auc = {(r["model"], r["protocol"]): r["auc"] for r in rows if r["family"] == "none"}
+        plot(rows, cells, base_auc, args.replot.replace(".csv", ".png"))
+        return
+    if not (args.val_dir and args.scale):
+        p.error("--val-dir and --scale are required unless --replot is given")
 
     assert list(EA.T7.NORMALIZE) == [True, False, False, True], \
         "model_input() replicates NORMALIZE=[T,F,F,T]; update it if the training normalisation changed"
@@ -273,24 +284,43 @@ def main():
     plot(rows, cells, base_auc, out.replace(".csv", ".png"))
 
 
+def load_rows(path):
+    num = {"seed": int, "value": float, "auc": float, "acc": float, "flip_rate": float,
+           "frac_eta_out": float, "frac_pt_out": float}
+    with open(path, newline="") as f:
+        return [{k: num.get(k, str)(v) for k, v in r.items()} for r in csv.DictReader(f)]
+
+
+# same colours as plot_scaling.py: ParT orange, LorentzParT blue; JEPA lighter, dashed, squares
+STYLE = {("part", "scratch"): ("#ff7f0e", "-", "o"), ("part", "jepa"): ("#ffbb78", "--", "s"),
+         ("lorentzpart", "scratch"): ("#1f77b4", "-", "o"), ("lorentzpart", "jepa"): ("#7fbfff", "--", "s")}
+NAMES = {"rotation": "azimuthal rotation", "long_boost": "longitudinal boost",
+         "transv_boost": "transverse boost"}
+
+
 def plot(rows, cells, base_auc, path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), sharey=True)
-    titles = {"rotation": "ROC AUC under azimuthal rotation",
-              "long_boost": "ROC AUC under longitudinal boost",
-              "transv_boost": "ROC AUC under transverse boost"}
-    for ax, (fam, (_, vals, label)) in zip(axes, FAMILIES.items()):
+    fig, axes = plt.subplots(2, 3, figsize=(15, 8.2), sharex="col", sharey="row")
+    for j, (fam, (_, vals, label)) in enumerate(FAMILIES.items()):
         for m, p in cells:
-            pts = sorted((r["value"], r["auc"]) for r in rows
+            pts = sorted((r["value"], r["auc"], r["flip_rate"]) for r in rows
                          if r["model"] == m and r["protocol"] == p and r["family"] == fam)
-            xs = [0.0] + [v for v, _ in pts]; ys = [base_auc[(m, p)]] + [a for _, a in pts]
-            ax.plot(xs, ys, marker="o", lw=1.8, ls="-" if p == "scratch" else "--",
-                    label=f"{'ParT' if m == 'part' else 'LorentzParT'} ({p})")
-        ax.set_title(titles[fam]); ax.set_xlabel(label); ax.grid(alpha=0.3)
-    axes[0].set_ylabel("ROC AUC (one-vs-one, macro)")
-    axes[0].legend(fontsize=8)
+            xs = [0.0] + [v for v, _, _ in pts]
+            color, ls, marker = STYLE.get((m, p), (None, "-", "o"))
+            kw = dict(color=color, ls=ls, marker=marker, lw=1.8,
+                      label=f"{'ParT' if m == 'part' else 'LorentzParT'} ({p})")
+            axes[0, j].plot(xs, [base_auc[(m, p)]] + [a for _, a, _ in pts], **kw)
+            axes[1, j].plot(xs, [0.0] + [100 * f for _, _, f in pts], **kw)
+        axes[0, j].set_title(f"ROC AUC under {NAMES[fam]}")
+        axes[1, j].set_title(f"Predictions changed under {NAMES[fam]}")
+        axes[1, j].set_xlabel(label)
+        for ax in axes[:, j]:
+            ax.grid(alpha=0.3)
+    axes[0, 0].set_ylabel("ROC AUC (one-vs-one, macro)")
+    axes[1, 0].set_ylabel("jets whose predicted class changed (%)")
+    axes[0, 0].legend(fontsize=8)
     fig.tight_layout(); fig.savefig(path, dpi=180)
     print(f"wrote {path}")
 

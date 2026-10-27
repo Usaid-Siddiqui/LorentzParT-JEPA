@@ -1,6 +1,9 @@
 # Generated data and model outputs
 /data/
 data_1m/
+# other dataset extracts (data_1m_disp/, data_1m_full/, ...) and download scratch
+/data_*/
+/urls.txt
 logs/*
 !logs/.gitkeep
 
