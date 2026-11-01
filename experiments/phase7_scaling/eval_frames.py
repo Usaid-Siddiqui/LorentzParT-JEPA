@@ -205,10 +205,9 @@ def main():
     args = p.parse_args()
 
     if args.replot:
-        rows = load_rows(args.replot)
-        cells = sorted({(r["model"], r["protocol"]) for r in rows})
-        base_auc = {(r["model"], r["protocol"]): r["auc"] for r in rows if r["family"] == "none"}
-        plot(rows, cells, base_auc, args.replot.replace(".csv", ".png"))
+        agg = aggregate(load_rows(args.replot))
+        print_summary(agg)
+        plot(agg, args.replot.replace(".csv", ".png"))
         return
     if not (args.val_dir and args.scale):
         p.error("--val-dir and --scale are required unless --replot is given")
@@ -259,29 +258,53 @@ def main():
     with open(out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=rows[0].keys()); w.writeheader(); w.writerows(rows)
 
-    # ---------------- readable summary ----------------
-    cells = sorted({(r["model"], r["protocol"]) for r in rows})
-    base_auc = {(r["model"], r["protocol"]): r["auc"] for r in rows if r["family"] == "none"}
-    print(f"\nAUC (change vs untransformed) and flip rate — {len(raw)} jets\n")
+    agg = aggregate(rows)
+    print(f"\n{len(raw)} jets")
+    print_summary(agg)
+    print(f"wrote {out}")
+    plot(agg, out.replace(".csv", ".png"))
+
+
+def aggregate(rows):
+    """One entry per (model, protocol, family, value), averaged over seeds. The AUC drop is computed
+    within each seed against that seed's own untransformed AUC, then averaged."""
+    base = {(r["model"], r["protocol"], r["seed"]): r["auc"] for r in rows if r["family"] == "none"}
+    groups = {}
+    for r in rows:
+        groups.setdefault((r["model"], r["protocol"], r["family"], r["value"]), []).append(r)
+    agg = {}
+    for key, rs in groups.items():
+        drops = [r["auc"] - base[(r["model"], r["protocol"], r["seed"])] for r in rs]
+        flips = [r["flip_rate"] for r in rs]
+        aucs = [r["auc"] for r in rs]
+        agg[key] = dict(n=len(rs), auc=float(np.mean(aucs)), auc_std=float(np.std(aucs)),
+                        drop=float(np.mean(drops)), drop_std=float(np.std(drops)),
+                        flip=float(np.mean(flips)), flip_std=float(np.std(flips)),
+                        eta_out=rs[0]["frac_eta_out"], pt_out=rs[0]["frac_pt_out"])
+    return agg
+
+
+def print_summary(agg):
+    cells = sorted({k[:2] for k in agg})
+    seeds = {c: agg[(*c, "none", 0.0)]["n"] for c in cells}
+    print("seeds per cell: " + ", ".join(f"{m}+{p}={seeds[(m, p)]}" for m, p in cells))
+    print("each cell: AUC (change vs untransformed) flip rate; +/- = std over seeds\n")
     for fam, (_, vals, label) in [("none", (None, [0.0], "—"))] + list(FAMILIES.items()):
         print(f"== {fam}  ({label})")
-        head = f"  {'value':>7} {'|eta|>2':>8} {'pT out':>7}"
-        print(head + "".join(f"  {m + '+' + p:>26}" for m, p in cells))
+        print(f"  {'value':>7} {'|eta|>2':>8} {'pT out':>7}" + "".join(f"  {m + '+' + p:>36}" for m, p in cells))
         for v in vals:
-            sel = {(r["model"], r["protocol"]): r for r in rows if r["family"] == fam and r["value"] == v}
-            eta_out, pt_out = ctx[(fam, v)]
-            line = f"  {v:>7.3g} {eta_out:>8.1%} {pt_out:>7.1%}"
+            first = next(agg[(*c, fam, v)] for c in cells if (*c, fam, v) in agg)
+            line = f"  {v:>7.3g} {first['eta_out']:>8.1%} {first['pt_out']:>7.1%}"
             for c in cells:
-                r = sel.get(c)
-                if r is None:
-                    line += f"  {'—':>26}"
+                e = agg.get((*c, fam, v))
+                if e is None:
+                    line += f"  {'—':>36}"
                 else:
-                    d = r["auc"] - base_auc[c]
-                    line += f"  {r['auc']:>8.4f} ({d:+.4f}) {r['flip_rate']:>6.1%}"
+                    text = (f"{e['auc']:.4f} ({e['drop']:+.4f}±{e['drop_std']:.4f}) "
+                            f"{100 * e['flip']:.1f}±{100 * e['flip_std']:.1f}%")
+                    line += f"  {text:>36}"
             print(line)
         print()
-    print(f"wrote {out}")
-    plot(rows, cells, base_auc, out.replace(".csv", ".png"))
 
 
 def load_rows(path):
@@ -298,21 +321,24 @@ NAMES = {"rotation": "azimuthal rotation", "long_boost": "longitudinal boost",
          "transv_boost": "transverse boost"}
 
 
-def plot(rows, cells, base_auc, path):
+def plot(agg, path):
+    cells = sorted({k[:2] for k in agg})
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(2, 3, figsize=(15, 8.2), sharex="col", sharey="row")
     for j, (fam, (_, vals, label)) in enumerate(FAMILIES.items()):
         for m, p in cells:
-            pts = sorted((r["value"], r["auc"], r["flip_rate"]) for r in rows
-                         if r["model"] == m and r["protocol"] == p and r["family"] == fam)
-            xs = [0.0] + [v for v, _, _ in pts]
+            base = agg[(m, p, "none", 0.0)]
+            pts = sorted((k[3], e) for k, e in agg.items() if k[:3] == (m, p, fam))
+            xs = [0.0] + [v for v, _ in pts]
             color, ls, marker = STYLE.get((m, p), (None, "-", "o"))
-            kw = dict(color=color, ls=ls, marker=marker, lw=1.8,
+            kw = dict(color=color, ls=ls, marker=marker, lw=1.8, capsize=3,
                       label=f"{'ParT' if m == 'part' else 'LorentzParT'} ({p})")
-            axes[0, j].plot(xs, [base_auc[(m, p)]] + [a for _, a, _ in pts], **kw)
-            axes[1, j].plot(xs, [0.0] + [100 * f for _, _, f in pts], **kw)
+            axes[0, j].errorbar(xs, [base["auc"]] + [e["auc"] for _, e in pts],
+                                yerr=[base["auc_std"]] + [e["auc_std"] for _, e in pts], **kw)
+            axes[1, j].errorbar(xs, [0.0] + [100 * e["flip"] for _, e in pts],
+                                yerr=[0.0] + [100 * e["flip_std"] for _, e in pts], **kw)
         axes[0, j].set_title(f"ROC AUC under {NAMES[fam]}")
         axes[1, j].set_title(f"Predictions changed under {NAMES[fam]}")
         axes[1, j].set_xlabel(label)
