@@ -327,6 +327,28 @@ def test_bool_padding_mask():
           f"max delta {res[True]:.1e} (float mask: {res[False]:.1e})")
 
 
+def test_background_rejection():
+    """Rej = 1/FPR at fixed TPR, on hand-built scores with a known answer."""
+    sys.path.insert(0, os.path.join(_REPO, "experiments", "phase7_scaling"))
+    EA = _load("eval_auc_t", "experiments/phase7_scaling/eval_auc.py")
+    # QCD: 1000 jets, 10 of them look signal-like. Hbb: 1000 jets, half above that level.
+    p = np.zeros((2000, 10))
+    p[:, 0] = 0.9; p[:, 1] = 0.1                     # score(S) = 0.1 for most jets
+    p[:10, 0] = 0.1; p[:10, 1] = 0.9                 # 10 QCD jets at score 0.9
+    sig = np.arange(1000, 2000)
+    p[sig[:500], 0] = 0.05; p[sig[:500], 1] = 0.95   # 500 Hbb at 0.95, above those QCD jets
+    p[sig[500:], 0] = 0.5; p[sig[500:], 1] = 0.5     # 500 Hbb at 0.5, below them
+    t = np.zeros(2000, dtype=int); t[sig] = 1
+    rej = EA.background_rejection(t, p)
+    cut = np.quantile(p[sig, 1] / (p[sig, 1] + p[sig, 0]), 0.5)
+    want = (1000 / 10, 10) if cut < 0.9 else (float("inf"), 0)
+    check("Background rejection: known answer at 50% efficiency", rej["Hbb"] == want,
+          f"Hbb={rej['Hbb']}, cut={cut:.3f}, want={want}")
+    check("Background rejection: uses 99%/99.5% for leptonic classes",
+          dict((n, e) for n, _, e in EA.SIGNALS)["Hlvqq"] == 0.99
+          and dict((n, e) for n, _, e in EA.SIGNALS)["tblv"] == 0.995)
+
+
 def main():
     tests = [
         ("interaction matrix liveness", test_interaction_alive),
@@ -345,6 +367,7 @@ def main():
         ("sweep completion", test_partial_cell_not_complete),
         ("resume guards", test_resume_guards),
         ("bool padding mask", test_bool_padding_mask),
+        ("background rejection", test_background_rejection),
     ]
     for title, fn in tests:
         print(f"\n== {title} ==")
