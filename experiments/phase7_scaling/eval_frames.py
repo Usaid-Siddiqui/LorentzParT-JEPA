@@ -15,7 +15,9 @@ jets is transformed, the jets are re-normalised exactly as in training, and each
 Reported per model and setting: AUC (one-vs-one macro), accuracy, and the FLIP RATE — the fraction of
 jets whose predicted class differs from the same model's prediction on the untransformed jets (the
 direct measure of sensitivity). Alongside, the fraction of jets each setting moves outside the training
-acceptance, so robustness and out-of-distribution are kept apart.
+acceptance, so robustness and out-of-distribution are kept apart. The INSIDE-ACCEPTANCE flip rate and
+AUC change repeat this on only the jets inside |eta_jet| <= 2 and 500-1000 GeV both before and after
+the transform, so a model is not penalised for jets the transform moved outside the training region.
 
 Only the four-vector is transformed. The 10 extra per-particle features (track displacement, PID) are
 left as they are — there is no consistent way to boost impact parameters — so this probes the
@@ -161,8 +163,9 @@ def predict(model, raw, norm, device, bs, fn=None, v=None):
 
 @torch.no_grad()
 def acceptance(raw, device, bs, fn=None, v=None):
-    """Fraction of jets outside the training acceptance after the transform (model-independent)."""
-    eta_out = pt_out = 0
+    """Per jet, whether it is inside the training |eta| and pT acceptance after the transform
+    (model-independent). Returns two bool arrays (eta_ok, pt_ok)."""
+    eta_ok, pt_ok = [], []
     for i in range(0, len(raw), bs):
         x = raw[i:i + bs].to(device, torch.float64)
         valid = x[..., 3] > 0
@@ -170,9 +173,9 @@ def acceptance(raw, device, bs, fn=None, v=None):
         if fn is not None:
             P = fn(P, v)
         pT, eta, _ = jet_kinematics(P, valid)
-        eta_out += (eta.abs() > JET_ETA_MAX).sum().item()
-        pt_out += ((pT < JET_PT_RANGE[0]) | (pT > JET_PT_RANGE[1])).sum().item()
-    return eta_out / len(raw), pt_out / len(raw)
+        eta_ok.append((eta.abs() <= JET_ETA_MAX).cpu())
+        pt_ok.append(((pT >= JET_PT_RANGE[0]) & (pT <= JET_PT_RANGE[1])).cpu())
+    return torch.cat(eta_ok).numpy(), torch.cat(pt_ok).numpy()
 
 
 def scores(y, probs, base_pred):
@@ -229,7 +232,11 @@ def main():
 
     settings = [("none", None, 0.0)] + [(fam, fn, v) for fam, (fn, vals, _) in FAMILIES.items()
                                         for v in vals]
-    ctx = {(fam, v): acceptance(raw, device, args.batch_size, fn, v) for fam, fn, v in settings}
+    # inside[(fam, v)]: jets inside the acceptance both before and after the transform, so the
+    # "inside acceptance" metrics compare the same jets with and without the transform
+    ok = {(fam, v): acceptance(raw, device, args.batch_size, fn, v) for fam, fn, v in settings}
+    ok0 = ok[("none", 0.0)][0] & ok[("none", 0.0)][1]
+    inside = {k: ok0 & e & p for k, (e, p) in ok.items()}
 
     rows = []
     for model_name in args.models:
@@ -247,10 +254,16 @@ def main():
                     probs = base if fn is None else predict(model, raw, norm, device,
                                                             args.batch_size, fn, v)
                     auc, acc, flip = scores(y, probs, base_pred)
-                    eta_out, pt_out = ctx[(fam, v)]
+                    eta_ok, pt_ok = ok[(fam, v)]
+                    m = inside[(fam, v)]
+                    auc_in, _, flip_in = scores(y[m], probs[m], base_pred[m])
+                    auc_in0 = scores(y[m], base[m], base_pred[m])[0]
                     rows.append(dict(model=model_name, protocol=proto, seed=seed, family=fam, value=v,
                                      auc=auc, acc=acc, flip_rate=flip,
-                                     frac_eta_out=eta_out, frac_pt_out=pt_out))
+                                     frac_eta_out=float((~eta_ok).mean()),
+                                     frac_pt_out=float((~pt_ok).mean()),
+                                     frac_inside=float(m.mean()), drop_inside=auc_in - auc_in0,
+                                     flip_inside=flip_in))
                 print(f"[frames] done {run}", flush=True)
 
     if not rows:
@@ -281,6 +294,12 @@ def aggregate(rows):
                         drop=float(np.mean(drops)), drop_std=float(np.std(drops)),
                         flip=float(np.mean(flips)), flip_std=float(np.std(flips)),
                         eta_out=rs[0]["frac_eta_out"], pt_out=rs[0]["frac_pt_out"])
+        if "flip_inside" in rs[0]:                  # absent in CSVs written before this metric
+            fi = [r["flip_inside"] for r in rs]
+            di = [r["drop_inside"] for r in rs]
+            agg[key].update(inside=rs[0]["frac_inside"],
+                            flip_in=float(np.mean(fi)), flip_in_std=float(np.std(fi)),
+                            drop_in=float(np.mean(di)), drop_in_std=float(np.std(di)))
     return agg
 
 
@@ -306,10 +325,29 @@ def print_summary(agg):
             print(line)
         print()
 
+    if not all("flip_in" in e for e in agg.values()):
+        return
+    print("INSIDE ACCEPTANCE: only jets inside |eta_jet| <= 2 and 500-1000 GeV both before and after "
+          "the transform\neach cell: AUC change vs the same jets untransformed, flip rate\n")
+    for fam, (_, vals, label) in FAMILIES.items():
+        print(f"== {fam}  ({label})")
+        print(f"  {'value':>7} {'inside':>8}" + "".join(f"  {m + '+' + p:>27}" for m, p in cells))
+        for v in vals:
+            first = next(agg[(*c, fam, v)] for c in cells if (*c, fam, v) in agg)
+            line = f"  {v:>7.3g} {first['inside']:>8.1%}"
+            for c in cells:
+                e = agg.get((*c, fam, v))
+                text = "—" if e is None else (f"{e['drop_in']:+.4f}±{e['drop_in_std']:.4f} "
+                                              f"{100 * e['flip_in']:.1f}±{100 * e['flip_in_std']:.1f}%")
+                line += f"  {text:>27}"
+            print(line)
+        print()
+
 
 def load_rows(path):
     num = {"seed": int, "value": float, "auc": float, "acc": float, "flip_rate": float,
-           "frac_eta_out": float, "frac_pt_out": float}
+           "frac_eta_out": float, "frac_pt_out": float, "frac_inside": float,
+           "drop_inside": float, "flip_inside": float}
     with open(path, newline="") as f:
         return [{k: num.get(k, str)(v) for k, v in r.items()} for r in csv.DictReader(f)]
 
@@ -326,7 +364,9 @@ def plot(agg, path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8.2), sharex="col", sharey="row")
+    has_in = all("flip_in" in e for e in agg.values())
+    rows = 3 if has_in else 2
+    fig, axes = plt.subplots(rows, 3, figsize=(15, 4.1 * rows), sharex="col", sharey="row")
     for j, (fam, (_, vals, label)) in enumerate(FAMILIES.items()):
         for m, p in cells:
             base = agg[(m, p, "none", 0.0)]
@@ -339,13 +379,20 @@ def plot(agg, path):
                                 yerr=[base["auc_std"]] + [e["auc_std"] for _, e in pts], **kw)
             axes[1, j].errorbar(xs, [0.0] + [100 * e["flip"] for _, e in pts],
                                 yerr=[0.0] + [100 * e["flip_std"] for _, e in pts], **kw)
+            if has_in:
+                axes[2, j].errorbar(xs, [0.0] + [100 * e["flip_in"] for _, e in pts],
+                                    yerr=[0.0] + [100 * e["flip_in_std"] for _, e in pts], **kw)
         axes[0, j].set_title(f"ROC AUC under {NAMES[fam]}")
         axes[1, j].set_title(f"Predictions changed under {NAMES[fam]}")
-        axes[1, j].set_xlabel(label)
+        if has_in:
+            axes[2, j].set_title("Predictions changed, jets inside acceptance")
+        axes[-1, j].set_xlabel(label)
         for ax in axes[:, j]:
             ax.grid(alpha=0.3)
     axes[0, 0].set_ylabel("ROC AUC (one-vs-one, macro)")
     axes[1, 0].set_ylabel("jets whose predicted class changed (%)")
+    if has_in:
+        axes[2, 0].set_ylabel("changed, inside |η|≤2, 500–1000 GeV (%)")
     axes[0, 0].legend(fontsize=8)
     fig.tight_layout(); fig.savefig(path, dpi=180)
     print(f"wrote {path}")
